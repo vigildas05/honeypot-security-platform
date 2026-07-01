@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-honeypot}
+      POSTGRES_USER: ${POSTGRES_USER:-honeypot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-honeypot_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-honeypot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: development
+      BACKEND_PORT: 8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-honeypot}:${POSTGRES_PASSWORD:-honeypot_password}@postgres:5432/${POSTGRES_DB:-honeypot}
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-dev-secret}
+      DASHBOARD_ADMIN_USERNAME: ${DASHBOARD_ADMIN_USERNAME:-admin}
+      DASHBOARD_ADMIN_PASSWORD: ${DASHBOARD_ADMIN_PASSWORD:-admin123}
+      HONEYPOT_API_TOKEN: ${HONEYPOT_API_TOKEN:-dev-honeypot-token}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npm run migrate && npm start"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  http-honeypot:
+    build: ./honeypots/http
+    environment:
+      HTTP_HONEYPOT_PORT: 8080
+      BACKEND_ATTACK_ENDPOINT: http://backend:8000/attack
+      HONEYPOT_API_TOKEN: ${HONEYPOT_API_TOKEN:-dev-honeypot-token}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+
+  ssh-honeypot:
+    build: ./honeypots/ssh
+    environment:
+      SSH_HONEYPOT_PORT: 2222
+      BACKEND_ATTACK_ENDPOINT: http://backend:8000/attack
+      HONEYPOT_API_TOKEN: ${HONEYPOT_API_TOKEN:-dev-honeypot-token}
+    ports:
+      - "2222:2222"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:

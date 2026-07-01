@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: honeypot-config
+  namespace: security-platform
+data:
+  BACKEND_PORT: "8000"
+  BACKEND_ATTACK_ENDPOINT: "http://backend:8000/attack"
+  CORS_ORIGINS: "http://localhost:3000"
+  SSH_HONEYPOT_PORT: "2222"
+  HTTP_HONEYPOT_PORT: "8080"
