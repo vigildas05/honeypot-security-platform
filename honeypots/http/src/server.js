@@ -9,6 +9,7 @@ const backendEndpoint =
   process.env.BACKEND_ATTACK_ENDPOINT ?? "http://localhost:8000/attack";
 const honeypotToken = process.env.HONEYPOT_API_TOKEN ?? "dev-honeypot-token";
 
+app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 app.use(express.text({ type: "*/*", limit: "100kb" }));
 
 function getClientIp(req) {
@@ -21,18 +22,27 @@ function getClientIp(req) {
 
 async function reportAttack(req) {
   const payload = {
-    ip: getClientIp(req),
-    protocol: "HTTP",
-    service: "http-honeypot",
-    userAgent: req.headers["user-agent"],
-    method: req.method,
-    path: req.originalUrl,
-    headers: req.headers,
-    metadata: {
-      bodyPreview: typeof req.body === "string" ? req.body.slice(0, 500) : ""
-    },
-    status: "captured"
-  };
+  ip: getClientIp(req),
+  protocol: "HTTP",
+  service: "http-honeypot",
+
+  username: req.body?.username,
+  password: req.body?.password,
+
+  userAgent: req.headers["user-agent"],
+  method: req.method,
+  path: req.originalUrl,
+  headers: req.headers,
+
+  metadata: {
+    bodyPreview:
+      typeof req.body === "string"
+        ? req.body.slice(0, 500)
+        : JSON.stringify(req.body).slice(0, 500)
+  },
+
+  status: "captured"
+};
 
   try {
     await fetch(backendEndpoint, {
