@@ -1,13 +1,15 @@
 import dotenv from "dotenv";
 import express from "express";
 import { createReporter, isLoopback, loadSensorConfig } from "../../common/reporter.js";
+import { createSensorLogger } from "../../common/log.js";
 import { buildHttpEvent } from "./capture.js";
 
 dotenv.config();
 
 const port = Number(process.env.HTTP_HONEYPOT_PORT ?? 8080);
+const log = createSensorLogger("http-sensor");
 const config = loadSensorConfig(process.env);
-const reporter = createReporter(config);
+const reporter = createReporter({ ...config, log: (msg) => log.warn(msg) });
 reporter.start();
 
 const app = express();
@@ -57,7 +59,7 @@ app.use(
 );
 
 const server = app.listen(port, () => {
-  console.log(`HTTP honeypot listening on port ${port}`);
+  log.info("listening", { port, sensorId: config.sensorId ?? null });
 });
 server.headersTimeout = 10_000;
 server.requestTimeout = 15_000;

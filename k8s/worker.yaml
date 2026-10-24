@@ -24,6 +24,7 @@ spec:
           command: ["node", "src/worker.js"]
           env:
             - { name: WORKER_HEALTH_PORT, value: "8000" }
+            - { name: SERVICE_NAME, value: honeypot-worker }
           envFrom:
             - configMapRef: { name: backend-config }
             - secretRef: { name: backend-secrets }

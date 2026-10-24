@@ -68,6 +68,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-honeypot}:${POSTGRES_PASSWORD:-honeypot_password}@postgres:5432/${POSTGRES_DB:-honeypot}
       # Liveness endpoint on localhost so the image's HEALTHCHECK works for the worker too.
       WORKER_HEALTH_PORT: 8000
+      SERVICE_NAME: honeypot-worker
       INCIDENT_WINDOW_MINUTES: ${INCIDENT_WINDOW_MINUTES:-30}
       AGENT_DEBOUNCE_SECONDS: ${AGENT_DEBOUNCE_SECONDS:-15}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
