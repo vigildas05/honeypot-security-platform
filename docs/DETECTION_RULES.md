@@ -30,7 +30,7 @@ Tests: [`rules.test.js`](../backend/test/unit/rules.test.js).
 | [T1082](https://attack.mitre.org/techniques/T1082/) | System Information Discovery | `uname`, `lscpu`, `nproc`, `free`, `/proc/cpuinfo`, … | 5 |
 | [T1033](https://attack.mitre.org/techniques/T1033/) | System Owner/User Discovery | `whoami`, `id`, `w`, `who`, `last` | 3 |
 | [T1105](https://attack.mitre.org/techniques/T1105/) | Ingress Tool Transfer | `wget`, `curl`, `tftp`, `ftpget`, `scp`, `/dev/tcp/` | 25 |
-| [T1222.002](https://attack.mitre.org/techniques/T1222/002/) | Linux File Permissions Modification | `chmod +x` / `chmod 777` | 5 |
+| [T1222.002](https://attack.mitre.org/techniques/T1222/002/) | Linux and Mac Permissions | `chmod +x` / `chmod 777` | 5 |
 | [T1070.003](https://attack.mitre.org/techniques/T1070/003/) | Clear Command History | `history -c`, `unset HISTFILE`, … | 10 |
 | [T1053.003](https://attack.mitre.org/techniques/T1053/003/) | Cron | `crontab`, `/etc/cron*`, `/var/spool/cron` | 25 |
 | [T1098.004](https://attack.mitre.org/techniques/T1098/004/) | SSH Authorized Keys | any command touching `authorized_keys` | 30 |
@@ -67,3 +67,16 @@ dashboard can show exactly why an incident got its level.
 ## Tuning
 
 Thresholds are in `DEFAULT_THRESHOLDS` in `rules.js`. Change them there and update the tests.
+
+## ATT&CK catalog
+
+Technique IDs (from rules or from the LLM agent) are validated against
+[`backend/src/attack/techniques.json`](../backend/src/attack/techniques.json): the 706 active
+techniques and sub-techniques of MITRE Enterprise ATT&CK v20.0, with revoked and deprecated
+entries excluded. A unit test checks that every rule's ID exists there and that its tactic
+matches. To refresh the list after a new ATT&CK release:
+
+```bash
+curl -sSfL -o /tmp/attack/enterprise-attack.json https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/enterprise-attack/enterprise-attack.json
+node backend/scripts/update-attack-ids.js /tmp/attack/enterprise-attack.json
+```

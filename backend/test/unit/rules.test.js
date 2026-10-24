@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getTechnique, isKnownTechnique } from "../../src/attack/catalog.js";
 import { computeFeatures } from "../../src/correlation/features.js";
 import { RULES, evaluateIncident, levelForScore } from "../../src/correlation/rules.js";
 import { bruteForce, httpReq, minerSession, spray, sshAuth, sshCmd } from "../fixtures/events.js";
@@ -15,6 +16,13 @@ describe("rule table", () => {
       expect(rule.id).toMatch(/^T\d{4}(\.\d{3})?$/);
       expect(seen.has(rule.id)).toBe(false);
       seen.add(rule.id);
+    }
+  });
+
+  it("every rule cites a real ATT&CK technique under one of its tactics", () => {
+    for (const rule of RULES) {
+      expect(isKnownTechnique(rule.id), rule.id).toBe(true);
+      expect(getTechnique(rule.id)?.tactics, rule.id).toContain(rule.tactic);
     }
   });
 });
