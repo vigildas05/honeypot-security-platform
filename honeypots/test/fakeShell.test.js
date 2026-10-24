@@ -72,6 +72,27 @@ describe("runLine canned responses", () => {
     expect(runLine(root(), 'echo "ssh-rsa AAAA" >> ~/.ssh/authorized_keys').output).toBe("");
   });
 
+  it("treats ( ... ) as a subshell group, piped output consumed", () => {
+    expect(splitCommands(`(crontab -l; echo "* * * * * x") | crontab -`)).toEqual([
+      [`(crontab -l; echo "* * * * * x")`, "crontab -"]
+    ]);
+    expect(runLine(root(), `(crontab -l 2>/dev/null; echo '*/10 * * * * /tmp/k') | crontab -`)).toEqual({ output: "", exit: false });
+  });
+
+  it("an exit inside a subshell does not end the session", () => {
+    expect(runLine(root(), "(exit); whoami")).toEqual({ output: "root", exit: false });
+  });
+
+  it("bounds subshell nesting", () => {
+    const deep = `${"(".repeat(50)}whoami${")".repeat(50)}`;
+    expect(runLine(root(), deep).output).toBe("-bash: maximum nesting depth exceeded");
+  });
+
+  it("keeps stderr-like messages visible through a pipe, hides piped stdout", () => {
+    expect(runLine(root(), "echo hidden | sh")).toEqual({ output: "", exit: false });
+    expect(runLine(root(), "frob | sh").output).toBe("-bash: frob: command not found");
+  });
+
   it("runs sequences and stops at exit", () => {
     expect(runLine(root(), "whoami; exit; id")).toEqual({ output: "root", exit: true });
   });
