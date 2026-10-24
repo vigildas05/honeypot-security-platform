@@ -4,8 +4,12 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
+import { denyReadOnlyWrites } from "./middleware/auth.js";
+import { requestId } from "./middleware/requestId.js";
+import actionRoutes from "./routes/actions.js";
 import attackRoutes from "./routes/attacks.js";
 import authRoutes from "./routes/auth.js";
+import edlRoutes from "./routes/edl.js";
 import ingestRoutes from "./routes/ingest.js";
 import statsRoutes from "./routes/stats.js";
 
@@ -15,6 +19,7 @@ app.disable("x-powered-by");
 // Only trust X-Forwarded-For from a known number of proxy hops (e.g. Render's LB).
 app.set("trust proxy", env.trustProxy);
 
+app.use(requestId);
 app.use(helmet());
 app.use(express.json({ limit: "256kb" }));
 app.use(
@@ -39,6 +44,8 @@ app.get("/health/ready", async (_req, res) => {
 
 // Sensor ingest has its own token-keyed rate limit (see routes/ingest.js).
 app.use(ingestRoutes);
+// Firewall EDL has its own credentials and rate limit.
+app.use(edlRoutes);
 
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -50,9 +57,11 @@ const apiLimiter = rateLimit({
 // Everything below the ingest routes is dashboard traffic; mount the limiter
 // once so a request falling through several routers is counted once.
 app.use(apiLimiter);
+app.use(denyReadOnlyWrites);
 app.use("/auth", authRoutes);
 app.use(attackRoutes);
 app.use(statsRoutes);
+app.use(actionRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

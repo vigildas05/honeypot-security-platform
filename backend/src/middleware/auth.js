@@ -24,6 +24,7 @@ export function buildSensorTokenMatcher(tokens) {
 }
 
 const matchSensorToken = buildSensorTokenMatcher(env.sensorTokens);
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * @param {import("express").Request} req
@@ -46,10 +47,36 @@ export function requireDashboardAuth(req, res, next) {
       return res.status(401).json({ error: "Invalid dashboard token" });
     }
     req.user = { id: String(claims.sub), username: String(claims.username), role: claims.role };
+    // Default-deny for the read-only demo role: any mutating method is refused
+    // here, so endpoints added later are protected even if they forget requireRole.
+    if (req.user.role !== "admin" && !SAFE_METHODS.has(req.method)) {
+      return res.status(403).json({ error: "Read-only account" });
+    }
     return next();
   } catch {
     return res.status(401).json({ error: "Invalid dashboard token" });
   }
+}
+
+/**
+ * Global default-deny for the read-only demo role, mounted before every
+ * dashboard router: a valid demo JWT on any non-GET/HEAD/OPTIONS request is
+ * refused, whether or not the route itself remembered to check roles.
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
+ * @param {import("express").NextFunction} next
+ */
+export function denyReadOnlyWrites(req, res, next) {
+  if (SAFE_METHODS.has(req.method)) return next();
+  const header = req.headers.authorization ?? "";
+  if (!header.startsWith("Bearer ")) return next();
+  try {
+    const claims = /** @type {jwt.JwtPayload} */ (jwt.verify(header.slice(7), env.jwtSecret, { algorithms: ["HS256"] }));
+    if (claims.role !== "admin") return res.status(403).json({ error: "Read-only account" });
+  } catch {
+    // Invalid tokens are handled (401) by requireDashboardAuth on real routes.
+  }
+  return next();
 }
 
 /**

@@ -33,6 +33,10 @@ services:
       SENSOR_TOKENS: dev-http:${HTTP_SENSOR_TOKEN:-dev-http-sensor-token},dev-ssh:${SSH_SENSOR_TOKEN:-dev-ssh-sensor-token}
       # Legacy shared token still accepted on POST /attack and /ingest.
       HONEYPOT_API_TOKEN: ${HONEYPOT_API_TOKEN:-dev-honeypot-token}
+      # Firewall EDL at /edl/blocklist.txt (token via ?token=, or basic auth).
+      EDL_AUTH_MODE: ${EDL_AUTH_MODE:-token}
+      EDL_TOKEN: ${EDL_TOKEN:-dev-edl-token-0123456789abcdef}
+      NEVER_BLOCK_IPS: ${NEVER_BLOCK_IPS:-}
     ports:
       - "8000:8000"
     depends_on:

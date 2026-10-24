@@ -181,6 +181,7 @@ export async function analyzeIncident(db, incidentId, { llm, budget, policy, log
  * @param {string} targetType
  * @param {string} targetId
  * @param {Record<string, unknown>} details
+ * @param {{ role?: string | null, requestId?: string | null }} [meta]
  */
 export async function audit(db, actor, action, targetType, targetId, details, { role = null, requestId = null } = {}) {
   await db.query(
