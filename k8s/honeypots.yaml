@@ -1,44 +1,6 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: http-honeypot
-  namespace: security-platform
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: http-honeypot
-  template:
-    metadata:
-      labels:
-        app: http-honeypot
-    spec:
-      containers:
-        - name: http-honeypot
-          image: http-honeypot:local
-          imagePullPolicy: Never
-          ports:
-            - containerPort: 8080
-          envFrom:
-            - configMapRef:
-                name: honeypot-config
-            - secretRef:
-                name: honeypot-secrets
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: http-honeypot
-  namespace: security-platform
-spec:
-  type: NodePort
-  selector:
-    app: http-honeypot
-  ports:
-    - port: 8080
-      targetPort: 8080
-      nodePort: 30081
----
+# Sensors: distroless, non-root, read-only, no capabilities, and ONLY their own
+# ingest token. Never mount backend-secrets here: the sensors refuse to start
+# if they see a backend secret.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -47,24 +9,41 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: ssh-honeypot
+    matchLabels: { app: ssh-honeypot, role: sensor }
   template:
     metadata:
-      labels:
-        app: ssh-honeypot
+      labels: { app: ssh-honeypot, role: sensor }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: ssh-honeypot
-          image: ssh-honeypot:local
-          imagePullPolicy: Never
-          ports:
-            - containerPort: 2222
-          envFrom:
-            - configMapRef:
-                name: honeypot-config
-            - secretRef:
-                name: honeypot-secrets
+          image: ghcr.io/vigildas05/honeypot-ssh-sensor:latest
+          ports: [{ containerPort: 2222 }]
+          env:
+            - { name: SENSOR_ID, value: k8s-ssh }
+            - { name: SENSOR_INGEST_URL, value: "http://backend:8000/ingest/v1/events" }
+            # In-cluster only. Across networks, use an https ingest URL.
+            - { name: ALLOW_INSECURE_INGEST, value: "true" }
+            - name: SENSOR_INGEST_TOKEN
+              valueFrom: { secretKeyRef: { name: sensor-ssh-token, key: SENSOR_INGEST_TOKEN } }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: hostkey, mountPath: /data }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: hostkey, emptyDir: {} }   # use a PVC to keep the host key across restarts
+        - { name: tmp, emptyDir: { sizeLimit: 16Mi } }
 ---
 apiVersion: v1
 kind: Service
@@ -73,9 +52,53 @@ metadata:
   namespace: security-platform
 spec:
   type: NodePort
+  selector: { app: ssh-honeypot }
+  ports: [{ port: 2222, targetPort: 2222, nodePort: 30022 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-honeypot
+  namespace: security-platform
+spec:
+  replicas: 1
   selector:
-    app: ssh-honeypot
-  ports:
-    - port: 2222
-      targetPort: 2222
-      nodePort: 30022
+    matchLabels: { app: http-honeypot, role: sensor }
+  template:
+    metadata:
+      labels: { app: http-honeypot, role: sensor }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: http-honeypot
+          image: ghcr.io/vigildas05/honeypot-http-sensor:latest
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: SENSOR_ID, value: k8s-http }
+            - { name: SENSOR_INGEST_URL, value: "http://backend:8000/ingest/v1/events" }
+            - { name: ALLOW_INSECURE_INGEST, value: "true" }
+            - name: SENSOR_INGEST_TOKEN
+              valueFrom: { secretKeyRef: { name: sensor-http-token, key: SENSOR_INGEST_TOKEN } }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 192Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: { sizeLimit: 16Mi } }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: http-honeypot
+  namespace: security-platform
+spec:
+  type: NodePort
+  selector: { app: http-honeypot }
+  ports: [{ port: 8080, targetPort: 8080, nodePort: 30081 }]

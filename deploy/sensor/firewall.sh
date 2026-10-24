@@ -21,7 +21,8 @@ set -euo pipefail
 
 CONF="${HONEYPOT_FW_CONF:-/etc/honeypot-sensor/firewall.conf}"
 STATE_DIR="${HONEYPOT_FW_STATE:-/var/lib/honeypot-firewall}"
-[[ -r "$CONF" ]] && source "$CONF"   # shellcheck source=/dev/null
+# shellcheck source=/dev/null
+[[ -r "$CONF" ]] && source "$CONF"
 
 : "${ADMIN_SSH_PORT:?set ADMIN_SSH_PORT in $CONF (real sshd port, not 22)}"
 : "${INGEST_HOST:?set INGEST_HOST in $CONF (backend hostname, e.g. api.example.com)}"
@@ -80,7 +81,7 @@ refresh_ingest_set() {
   for ip in $ips; do ipset add -exist "${INGEST_SET}_new" "$ip"; done
   ipset swap "${INGEST_SET}_new" "$INGEST_SET"
   ipset destroy "${INGEST_SET}_new"
-  log "ingest allowlist: $(echo $ips)"
+  log "ingest allowlist: $(tr '\n' ' ' <<<"$ips")"
 }
 
 # (Re)create one of our chains, empty, and make sure the parent jumps to it first.

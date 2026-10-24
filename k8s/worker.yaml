@@ -1,0 +1,41 @@
+# Correlation, enrichment, SOC agent, retention. The optional LLM and
+# threat-intel keys belong in a separate secret envFrom'd here only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: security-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: worker
+          image: ghcr.io/vigildas05/honeypot-backend:latest
+          command: ["node", "src/worker.js"]
+          env:
+            - { name: WORKER_HEALTH_PORT, value: "8000" }
+          envFrom:
+            - configMapRef: { name: backend-config }
+            - secretRef: { name: backend-secrets }
+          livenessProbe:
+            exec: { command: ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/"] }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: { sizeLimit: 32Mi } }]
