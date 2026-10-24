@@ -13,5 +13,5 @@ COPY --from=deps --chown=root:root /app/node_modules ./node_modules
 USER node
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1:${BACKEND_PORT:-8000}/health || exit 1
+  CMD wget -q -O /dev/null "http://127.0.0.1:${BACKEND_PORT:-${PORT:-8000}}/health" || exit 1
 CMD ["node", "src/server.js"]

@@ -1,0 +1,73 @@
+# Render Blueprint: API (+ embedded worker) on the free web plan.
+# Postgres is NOT created here: use Neon (free, doesn't expire) and paste its
+# *direct* (non-pooler) connection string into DATABASE_URL.
+# See docs/DEPLOYMENT.md for the full walkthrough.
+services:
+  - type: web
+    name: honeypot-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    # Free plan has no pre-deploy hook, so migrate on start (idempotent, advisory-locked).
+    dockerCommand: sh -c "node src/db/migrate.js && node src/server.js"
+    healthCheckPath: /health/ready
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: EMBEDDED_WORKER        # set to "false" if you add the separate worker below
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        sync: false                  # Neon direct connection string, ?sslmode=require
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: SENSOR_TOKENS
+        sync: false                  # oci-ssh-1:<token>,oci-http-1:<token>
+      - key: CORS_ORIGINS
+        sync: false                  # https://<your-project>.vercel.app
+      - key: DASHBOARD_ADMIN_USERNAME
+        value: admin
+      - key: DASHBOARD_ADMIN_PASSWORD
+        sync: false
+      - key: DASHBOARD_DEMO_USERNAME
+        value: demo
+      - key: DASHBOARD_DEMO_PASSWORD
+        sync: false
+      - key: NEVER_BLOCK_IPS
+        sync: false                  # sensor IP, your home IP, ...
+      - key: EDL_AUTH_MODE
+        value: token
+      - key: EDL_TOKEN
+        generateValue: true
+      - key: EVENT_RETENTION_DAYS
+        value: "30"
+      - key: INCIDENT_RETENTION_DAYS
+        value: "90"
+      # Optional, worker-side (embedded): LLM + threat intel. Leave unset for rule-only reports.
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        sync: false
+      - key: ABUSEIPDB_API_KEY
+        sync: false
+      - key: VIRUSTOTAL_API_KEY
+        sync: false
+      - key: GREYNOISE_API_KEY
+        sync: false
+
+  # Paid alternative: a separate background worker (then set EMBEDDED_WORKER=false above).
+  # - type: worker
+  #   name: honeypot-worker
+  #   runtime: docker
+  #   plan: starter
+  #   dockerContext: ./backend
+  #   dockerfilePath: ./backend/Dockerfile
+  #   dockerCommand: node src/worker.js
+  #   envVars:
+  #     - fromGroup: honeypot-shared   # move shared vars into an env group
