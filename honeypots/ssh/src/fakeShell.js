@@ -150,6 +150,8 @@ export function splitCommands(line) {
   let stages = [];
   let current = "";
   let quote = "";
+  // Depth of ( ) / $( ) nesting: separators inside a group don't split it.
+  let depth = 0;
   const pushStage = () => {
     if (current.trim()) stages.push(current.trim());
     current = "";
@@ -167,6 +169,14 @@ export function splitCommands(line) {
       current += ch;
     } else if (ch === "'" || ch === '"') {
       quote = ch;
+      current += ch;
+    } else if (ch === "(") {
+      depth += 1;
+      current += ch;
+    } else if (ch === ")") {
+      depth = Math.max(0, depth - 1);
+      current += ch;
+    } else if (depth > 0) {
       current += ch;
     } else if (ch === ";" || ch === "\n") {
       pushSegment();
@@ -381,21 +391,60 @@ function hostOf(url) {
  * @returns {{ output: string, exit: boolean }}
  */
 export function runLine(state, line) {
+  return runLineAtDepth(state, line, 0);
+}
+
+/** Canned outputs that a real shell would print on stderr (so they survive a pipe). */
+const STDERR_LIKE = /^(-bash: |curl: |wget: |--\d{4}-|cat: |tftp|Transfer timed out|usage: )/;
+const MAX_GROUP_DEPTH = 4;
+
+/**
+ * @param {ShellState} state
+ * @param {string} line
+ * @param {number} depth subshell nesting, bounded so "((((...))))" can't recurse forever
+ * @returns {{ output: string, exit: boolean }}
+ */
+function runLineAtDepth(state, line, depth) {
   const outputs = [];
   for (const stages of splitCommands(line)) {
-    // Pipelines: there is no real stdin, so filter stages (grep, wc, ...) are
-    // treated as pass-through and every other stage's output is shown, which
-    // approximates stdout+stderr well enough for bots.
+    // Pipelines have no real stdin. Filter stages (grep, wc, ...) pass the
+    // first stage's output through; when output is piped into a real command
+    // (`... | sh`, `... | crontab -`) it is consumed, and only stderr-like
+    // messages (command not found, download failures) still appear.
+    const onlyFilters = stages.slice(1).every((s) => PIPE_FILTERS.has(baseOf(s)));
     for (const [index, stage] of stages.entries()) {
-      const words = tokenize(stage);
-      const base = (words[0] ?? "").split("/").pop() ?? "";
-      if (index > 0 && PIPE_FILTERS.has(base)) continue;
-      const result = runSimple(state, words);
-      if (result.output) outputs.push(result.output);
+      if (index > 0 && PIPE_FILTERS.has(baseOf(stage))) continue;
+      const result = runStage(state, stage, depth);
+      const isLast = index === stages.length - 1;
+      const visible = isLast || onlyFilters ? result.output : result.output.split("\n").filter((l) => STDERR_LIKE.test(l)).join("\n");
+      if (visible) outputs.push(visible);
       if (result.exit) return { output: clip(outputs.join("\n")), exit: true };
     }
   }
   return { output: clip(outputs.join("\n")), exit: false };
+}
+
+/** @param {string} stage */
+function baseOf(stage) {
+  return (tokenize(stage)[0] ?? "").split("/").pop() ?? "";
+}
+
+/**
+ * One pipeline stage: a `( ... )` group runs as a nested sequence (like a
+ * subshell: `exit` inside it doesn't end the session), anything else as a
+ * simple command.
+ * @param {ShellState} state
+ * @param {string} stage
+ * @param {number} depth
+ * @returns {{ output: string, exit?: boolean }}
+ */
+function runStage(state, stage, depth) {
+  const trimmed = stage.trim();
+  if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+    if (depth >= MAX_GROUP_DEPTH) return { output: "-bash: maximum nesting depth exceeded" };
+    return { output: runLineAtDepth(state, trimmed.slice(1, -1), depth + 1).output };
+  }
+  return runSimple(state, tokenize(stage));
 }
 
 /** @param {string} s */
