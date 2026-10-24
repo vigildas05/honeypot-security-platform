@@ -4,6 +4,8 @@ import { env } from "../config/env.js";
 import { parseEvent } from "../ingest/eventSchema.js";
 import { legacyAttackToWireEvent } from "../ingest/legacy.js";
 import { requireHoneypotToken } from "../middleware/auth.js";
+import { incrementCounters } from "../lib/metrics.js";
+import { pool } from "../db/pool.js";
 import { insertEvents } from "../services/eventService.js";
 
 const router = express.Router();
@@ -22,8 +24,9 @@ const ingestLimiter = rateLimit({
 /**
  * @param {unknown[]} items
  * @param {string} sensorId
+ * @param {import("express").Request} req
  */
-async function ingest(items, sensorId) {
+async function ingest(items, sensorId, req) {
   const valid = [];
   const rejected = [];
   for (const [index, item] of items.entries()) {
@@ -33,8 +36,14 @@ async function ingest(items, sensorId) {
   }
   const inserted = await insertEvents(valid);
   if (rejected.length > 0) {
-    console.warn(`ingest: sensor=${sensorId} rejected=${rejected.length} accepted=${inserted.length}`);
+    // Counts and schema paths only; never the attacker's values.
+    req.log.warn({ sensorId, accepted: inserted.length, rejected: rejected.length, errors: rejected.slice(0, 3).map((r) => r.error) }, "ingest rejected events");
   }
+  await incrementCounters(pool, {
+    "ingest.accepted": inserted.length,
+    "ingest.rejected": rejected.length,
+    [`ingest.sensor.${sensorId}`]: inserted.length
+  });
   return { inserted, rejected };
 }
 
@@ -49,7 +58,7 @@ router.post("/ingest/v1/events", requireHoneypotToken, ingestLimiter, async (req
       return res.status(413).json({ error: `Batch exceeds ${env.ingestMaxBatch} events` });
     }
 
-    const { inserted, rejected } = await ingest(items, /** @type {string} */ (req.sensorId));
+    const { inserted, rejected } = await ingest(items, /** @type {string} */ (req.sensorId), req);
     if (inserted.length === 0) {
       return res.status(400).json({ error: "All events were rejected", accepted: 0, rejected });
     }
@@ -64,7 +73,8 @@ router.post("/attack", requireHoneypotToken, ingestLimiter, async (req, res, nex
   try {
     const { inserted, rejected } = await ingest(
       [legacyAttackToWireEvent(req.body)],
-      /** @type {string} */ (req.sensorId)
+      /** @type {string} */ (req.sensorId),
+      req
     );
     if (inserted.length === 0) {
       return res.status(400).json({ error: "Invalid attack payload", details: rejected[0]?.error });

@@ -27,7 +27,7 @@ const decisionBody = z.object({ reason: z.string().trim().min(3).max(500) }).str
 const actorOf = (req) => ({
   username: /** @type {NonNullable<typeof req.user>} */ (req.user).username,
   role: /** @type {NonNullable<typeof req.user>} */ (req.user).role,
-  requestId: req.id
+  requestId: req.id === undefined ? undefined : String(req.id)
 });
 
 router.get("/actions", requireDashboardAuth, async (req, res, next) => {

@@ -2,11 +2,14 @@ import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import { pinoHttp } from "pino-http";
 import { env } from "./config/env.js";
 import { pool } from "./db/pool.js";
+import { logger, redactUrl } from "./lib/logger.js";
 import { denyReadOnlyWrites } from "./middleware/auth.js";
 import { requestId } from "./middleware/requestId.js";
 import actionRoutes from "./routes/actions.js";
+import adminRoutes from "./routes/admin.js";
 import attackRoutes from "./routes/attacks.js";
 import authRoutes from "./routes/auth.js";
 import edlRoutes from "./routes/edl.js";
@@ -21,6 +24,20 @@ app.disable("x-powered-by");
 app.set("trust proxy", env.trustProxy);
 
 app.use(requestId);
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req) => /** @type {any} */ (req).id,
+    // Health checks are polled constantly; don't drown the logs.
+    autoLogging: { ignore: (req) => (req.url ?? "").startsWith("/health") },
+    customLogLevel: (_req, res, err) => (err || res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info"),
+    serializers: {
+      // Only what's needed: no headers, no bodies, secret query params masked.
+      req: (req) => ({ id: req.id, method: req.method, url: redactUrl(req.url), remoteAddress: req.remoteAddress }),
+      res: (res) => ({ statusCode: res.statusCode })
+    }
+  })
+);
 app.use(
   helmet({
     // JSON-only API: nothing it returns should ever be rendered as a document.
@@ -70,6 +87,7 @@ app.use(attackRoutes);
 app.use(statsRoutes);
 app.use(actionRoutes);
 app.use(incidentRoutes);
+app.use(adminRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
@@ -89,8 +107,8 @@ const errorHandler = (err, _req, res, _next) => {
   if (err?.type === "entity.parse.failed") {
     return res.status(400).json({ error: "Malformed JSON" });
   }
-  console.error(err);
-  return res.status(500).json({ error: "Internal server error" });
+  _req.log?.error({ err }, "unhandled error");
+  return res.status(500).json({ error: "Internal server error", request_id: _req.id });
 };
 
 app.use(errorHandler);

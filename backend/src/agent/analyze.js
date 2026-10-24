@@ -39,10 +39,10 @@ export function createDbBudget(db, llm) {
  *   llm: import("./llmClient.js").LlmClient | null,
  *   budget: import("./core.js").Budget,
  *   policy: ReturnType<typeof import("./policy.js").createPolicyEngine>,
- *   log?: (msg: string) => void
+ *   log?: (msg: string, fields?: Record<string, unknown>) => void
  * }} deps
  */
-export async function analyzeIncident(db, incidentId, { llm, budget, policy, log = console.log }) {
+export async function analyzeIncident(db, incidentId, { llm, budget, policy, log = () => {} }) {
   const inc = await db.query(
     `SELECT id, host(src_ip) AS src_ip, first_seen, last_seen, event_count, severity, severity_score,
             techniques, tags, stats
@@ -64,6 +64,10 @@ export async function analyzeIncident(db, incidentId, { llm, budget, policy, log
   const newlyTaggedInjection = !incident.tags.includes(INJECTION_TAG) && result.tags.includes(INJECTION_TAG);
   const actor = "system:agent";
 
+  const tokensIn = result.calls.reduce((s, c) => s + c.tokensIn, 0);
+  const tokensOut = result.calls.reduce((s, c) => s + c.tokensOut, 0);
+  const latency = result.calls.reduce((s, c) => s + (c.latencyMs ?? 0), 0);
+
   const client = await db.connect();
   let reportId;
   const created = [];
@@ -78,9 +82,6 @@ export async function analyzeIncident(db, incidentId, { llm, budget, policy, log
       );
     }
 
-    const tokensIn = result.calls.reduce((s, c) => s + c.tokensIn, 0);
-    const tokensOut = result.calls.reduce((s, c) => s + c.tokensOut, 0);
-    const latency = result.calls.reduce((s, c) => s + (c.latencyMs ?? 0), 0);
     const inserted = await client.query(
       `INSERT INTO agent_reports (incident_id, source, ai_generated, model, prompt_version, report,
                                   validation_status, fallback_reason, tokens_in, tokens_out, latency_ms)
@@ -166,11 +167,19 @@ export async function analyzeIncident(db, incidentId, { llm, budget, policy, log
     client.release();
   }
 
-  log(
-    `agent: incident=${incidentId} source=${result.source} status=${result.validationStatus}` +
-      `${result.fallbackReason ? ` fallback=${result.fallbackReason}` : ""} proposals=${created.length}` +
-      ` violations=${result.violations.length}${result.canaryLeak ? " CANARY_LEAK" : ""}`
-  );
+  log("agent report stored", {
+    incidentId,
+    source: result.source,
+    validationStatus: result.validationStatus,
+    fallbackReason: result.fallbackReason,
+    proposals: created.length,
+    policyViolations: result.violations.length,
+    injectionFindings: result.injectionFindings.length,
+    canaryLeak: result.canaryLeak,
+    llmCalls: result.calls.length,
+    tokens: tokensIn + tokensOut,
+    latencyMs: latency
+  });
   return { reportId, proposedActionIds: created, ...result };
 }
 

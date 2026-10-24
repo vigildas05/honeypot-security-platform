@@ -13,10 +13,12 @@ import { env } from "./config/env.js";
 import { closeIdleIncidents, correlateNewEvents, rescoreIncident } from "./correlation/correlator.js";
 import { pool } from "./db/pool.js";
 import { createEnrichmentService } from "./enrichment/service.js";
+import { logger as rootLogger } from "./lib/logger.js";
 import { incrementCounters } from "./lib/metrics.js";
 import { expireActions } from "./services/actionService.js";
 import { applyRetention, loadRetentionConfig } from "./services/retention.js";
 
+const log = rootLogger.child({ component: "worker" });
 const Q_ENRICH = "enrich-ip";
 const Q_ANALYZE = "analyze-incident";
 const Q_EXPIRE = "expire-actions";
@@ -28,10 +30,14 @@ const retentionConfig = loadRetentionConfig(process.env);
 const policy = createPolicyEngine(agentConfig.policy); // throws on a bad NEVER_BLOCK_IPS entry
 const llm = llmConfigured(agentConfig) ? createOpenAICompatibleClient(agentConfig.llm) : null;
 const budget = createDbBudget(pool, agentConfig.llm);
-const enrichment = await createEnrichmentService({ db: pool, config: loadEnrichmentConfig(process.env) });
+const enrichment = await createEnrichmentService({
+  db: pool,
+  config: loadEnrichmentConfig(process.env),
+  log: (msg) => rootLogger.warn({ component: "enrichment" }, msg)
+});
 
 const boss = new PgBoss({ connectionString: env.databaseUrl, schema: "pgboss", application_name: "honeypot-worker" });
-boss.on("error", (error) => console.error("pg-boss error:", error.message));
+boss.on("error", (error) => log.error({ err: error }, "pg-boss error"));
 
 /**
  * Queue analysis if the incident changed significantly since the last report.
@@ -82,7 +88,7 @@ async function correlateTick() {
     } while (touched.length > 0 && touched.length >= 50);
     await closeIdleIncidents(pool, agentConfig.incidentWindowMinutes);
   } catch (error) {
-    console.error("correlation tick failed:", /** @type {Error} */ (error).message);
+    log.error({ err: error }, "correlation tick failed");
     if (lockClient) {
       lockClient.release(true);
       lockClient = null;
@@ -112,19 +118,19 @@ await boss.work(Q_ENRICH, async (/** @type {any[]} */ [job]) => {
 });
 
 await boss.work(Q_ANALYZE, async (/** @type {any[]} */ [job]) => {
-  await analyzeIncident(pool, String(job.data.incidentId), { llm, budget, policy });
+  await analyzeIncident(pool, String(job.data.incidentId), { llm, budget, policy, log: (msg, fields) => log.info(fields ?? {}, msg) });
 });
 
 await boss.work(Q_EXPIRE, async () => {
   const n = await expireActions(pool);
-  if (n) console.log(`expired ${n} action(s)`);
+  if (n) log.info({ expired: n }, "expired actions");
 });
 await boss.schedule(Q_EXPIRE, "* * * * *");
 
 await boss.createQueue(Q_RETENTION, { policy: "singleton" });
 await boss.work(Q_RETENTION, async () => {
   const r = await applyRetention(pool, retentionConfig);
-  console.log(`retention: ${JSON.stringify(r)}`);
+  log.info({ retention: r }, "retention applied");
   await incrementCounters(pool, { "retention.events_deleted": r.events, "retention.incidents_deleted": r.incidents });
 });
 await boss.schedule(Q_RETENTION, "17 3 * * *"); // daily, 03:17 UTC
@@ -148,7 +154,7 @@ async function heartbeat(first = false) {
          ${first ? ", started_at = NOW()" : ""}`,
       [JSON.stringify(data)]
     )
-    .catch((error) => console.error("heartbeat failed:", error.message));
+    .catch((error) => log.error({ err: error }, "heartbeat failed"));
 }
 await heartbeat(true);
 const heartbeatTimer = setInterval(() => void heartbeat(), 60_000);
@@ -156,10 +162,14 @@ const heartbeatTimer = setInterval(() => void heartbeat(), 60_000);
 const interval = setInterval(correlateTick, agentConfig.correlateIntervalSeconds * 1000);
 void correlateTick();
 
-console.log(
-  `worker started: llm=${llm ? `${llm.model} (${agentConfig.llm.baseUrl})` : "disabled (rule-only reports)"}` +
-    ` intel=[${enrichment.enabledProviders.join(", ") || "none"}] window=${agentConfig.incidentWindowMinutes}m` +
-    ` debounce=${agentConfig.debounceSeconds}s`
+log.info(
+  {
+    llm: llm ? { model: llm.model, baseUrl: agentConfig.llm.baseUrl } : null,
+    intel: enrichment.enabledProviders,
+    windowMinutes: agentConfig.incidentWindowMinutes,
+    debounceSeconds: agentConfig.debounceSeconds
+  },
+  `worker started (${llm ? `llm=${llm.model}` : "rule-only reports"})`
 );
 
 // Optional liveness endpoint for platforms that want one (bind to localhost by default).

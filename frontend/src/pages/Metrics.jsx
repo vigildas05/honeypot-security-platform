@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { apiGet } from "../api/client.js";
+import { apiGet, getSession } from "../api/client.js";
 import { useApi } from "../api/useApi.js";
 import { ErrorBox, IncidentLink, Meter, RankList, SeverityBadge, Stat, TechniqueLink, Time } from "../components/ui.jsx";
 
@@ -132,6 +132,57 @@ export function Metrics() {
           </table>
         </div>
       </section>
+
+      {getSession()?.role === "admin" ? <Observability /> : null}
     </>
+  );
+}
+
+/** Admin-only pipeline/agent health, from GET /admin/metrics. */
+function Observability() {
+  const { data: o, error } = useApi(() => apiGet("/admin/metrics"), [], { pollMs: 30000 });
+  if (error) return <ErrorBox message={error} />;
+  if (!o) return null;
+  const ms = (/** @type {number | null} */ v) => (v === null || v === undefined ? "-" : `${v.toLocaleString()} ms`);
+  const rows = [
+    ["Events ingested / rejected (today)", `${o.today.events_ingested} / ${o.today.events_rejected}`],
+    ["Events not yet correlated", o.pipeline.uncorrelated_events],
+    ["Events in the last hour", o.pipeline.events_last_hour],
+    ["Worker heartbeat", o.worker ? `${o.worker.heartbeat_age_seconds}s ago${o.worker.alive ? "" : " (STALE)"}` : "never"],
+    ["LLM latency p50 / p95 / max (24h)", `${ms(o.llm_24h.latency_ms.p50)} / ${ms(o.llm_24h.latency_ms.p95)} / ${ms(o.llm_24h.latency_ms.max)}`],
+    ["LLM tokens in / out (24h)", `${o.llm_24h.tokens_in.toLocaleString()} / ${o.llm_24h.tokens_out.toLocaleString()}`],
+    ["LLM validation failures (7d)", o.last_7_days.llm_validation_failures],
+    ["Canary leaks caught (7d)", o.last_7_days.canary_leaks],
+    ["Policy violations blocked (7d)", o.last_7_days.policy_violations_blocked],
+    ["Injection incidents (7d)", o.last_7_days.injection_incidents]
+  ];
+  return (
+    <section className="panel">
+      <h2>Pipeline &amp; agent health <span className="badge role-admin">admin</span></h2>
+      <p className="muted">
+        Same data as <code>GET /admin/metrics</code> (JSON, or <code>?format=prometheus</code> with <code>METRICS_TOKEN</code>).
+      </p>
+      <div className="dashboard-grid">
+        <table className="compact">
+          <tbody>
+            {rows.map(([k, v]) => <tr key={String(k)}><td>{k}</td><td><strong>{v}</strong></td></tr>)}
+          </tbody>
+        </table>
+        <div>
+          <h3>Job queues</h3>
+          {o.queues.length ? (
+            <table className="compact">
+              <tbody>
+                {o.queues.map((/** @type {any} */ q) => (
+                  <tr key={`${q.name}-${q.state}`} className={q.state === "failed" ? "row-alert" : undefined}>
+                    <td>{q.name}</td><td>{q.state}</td><td><strong>{q.count}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <p className="muted">No queued, active or failed jobs.</p>}
+        </div>
+      </div>
+    </section>
   );
 }

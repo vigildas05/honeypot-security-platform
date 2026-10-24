@@ -73,6 +73,8 @@ services:
       EDL_TOKEN: ${EDL_TOKEN:-}
       EDL_BASIC_USER: ${EDL_BASIC_USER:-}
       EDL_BASIC_PASSWORD: ${EDL_BASIC_PASSWORD:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -88,6 +90,7 @@ services:
     environment:
       <<: *backend-env
       WORKER_HEALTH_PORT: 8000
+      SERVICE_NAME: honeypot-worker
       INCIDENT_WINDOW_MINUTES: ${INCIDENT_WINDOW_MINUTES:-30}
       AGENT_DEBOUNCE_SECONDS: ${AGENT_DEBOUNCE_SECONDS:-120}
       EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-30}

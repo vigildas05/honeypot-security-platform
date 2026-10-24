@@ -9,6 +9,7 @@ import {
   loadSensorConfig
 } from "../../common/reporter.js";
 import { DEFAULT_ACCEPTED_CREDENTIALS, isAccepted, parseAcceptedCredentials } from "./credentials.js";
+import { createSensorLogger } from "../../common/log.js";
 import { createShellState, prompt, runLine } from "./fakeShell.js";
 
 dotenv.config();
@@ -30,8 +31,9 @@ const LIMITS = {
   maxSessionMs: 15 * 60 * 1000
 };
 
+const log = createSensorLogger("ssh-sensor");
 const config = loadSensorConfig(process.env);
-const reporter = createReporter(config);
+const reporter = createReporter({ ...config, log: (msg) => log.warn(msg) });
 reporter.start();
 
 /** Load a persistent host key so the fingerprint is stable across restarts. */
@@ -47,7 +49,7 @@ function loadHostKey() {
     try {
       fs.writeFileSync(hostKeyPath, key, { mode: 0o600 });
     } catch {
-      console.warn(`Could not persist host key to ${hostKeyPath}; using an ephemeral key.`);
+      log.warn("could not persist host key; using an ephemeral key", { hostKeyPath });
     }
     return key;
   }
@@ -287,10 +289,10 @@ const server = new Server(
   }
 );
 
-server.on("error", (/** @type {Error} */ error) => console.error("SSH server error:", error.message));
+server.on("error", (/** @type {Error} */ error) => log.error("server error", { error: error.message }));
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`SSH honeypot listening on port ${port}`);
+  log.info("listening", { port, sensorId: config.sensorId ?? null, acceptedCredentials: accepted.size });
 });
 
 for (const signal of ["SIGTERM", "SIGINT"]) {
