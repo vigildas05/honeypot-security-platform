@@ -18,17 +18,35 @@ export function maskIp(ip) {
   return "x";
 }
 
+// Not part of a longer dotted number on either side (a sentence-ending "." is fine).
+const IPV4_IN_TEXT = /(?<!\d|\d\.)(?:\d{1,3}\.){3}\d{1,3}(?!\d|\.\d)/g;
+// Candidate IPv6 literals (embedded-IPv4 form tried first); confirmed with net.isIPv6.
+const IPV6_IN_TEXT = /(?<![\w:])(?:[0-9a-fA-F]{0,4}:){2,7}(?:(?:\d{1,3}\.){3}\d{1,3}|[0-9a-fA-F]{0,4})(?![\w:]|\.\d)/g;
+
+/**
+ * Mask every IP literal embedded in free text (report summaries, technique
+ * evidence, attacker strings, audit details...).
+ * @param {string} text
+ */
+export function maskIpsInText(text) {
+  return text
+    .replace(IPV6_IN_TEXT, (m) => (net.isIPv6(m) ? maskIp(m) ?? m : m))
+    .replace(IPV4_IN_TEXT, (m) => (net.isIPv4(m) ? maskIp(m) ?? m : m));
+}
+
 // `network`, `hostname` and `domain` (from threat intel) also identify the host.
 export const MASKED_KEYS = new Set(["ip", "src_ip", "target", "network", "hostname", "domain"]);
 
 /**
- * Recursively mask IP-valued fields (by key name) in API payloads.
+ * Recursively mask IPs in API payloads: whole values under IP-ish keys, and
+ * IP literals inside any other string.
  * @template T
  * @param {T} value
  * @param {Set<string>} [keys]
  * @returns {T}
  */
 export function maskIpFields(value, keys = MASKED_KEYS) {
+  if (typeof value === "string") return /** @type {T} */ (maskIpsInText(value));
   if (Array.isArray(value)) return /** @type {T} */ (value.map((v) => maskIpFields(v, keys)));
   if (value && typeof value === "object" && !(value instanceof Date)) {
     /** @type {Record<string, unknown>} */

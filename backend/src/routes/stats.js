@@ -1,21 +1,22 @@
 import express from "express";
+import { forViewer } from "../lib/mask.js";
 import { requireDashboardAuth } from "../middleware/auth.js";
 import { getStats } from "../services/attackService.js";
 
 const router = express.Router();
 
-router.get("/stats", requireDashboardAuth, async (_req, res, next) => {
+router.get("/stats", requireDashboardAuth, async (req, res, next) => {
   try {
-    return res.json(await getStats());
+    return res.json(forViewer(req, await getStats()));
   } catch (error) {
     return next(error);
   }
 });
 
-router.get("/top-ip", requireDashboardAuth, async (_req, res, next) => {
+router.get("/top-ip", requireDashboardAuth, async (req, res, next) => {
   try {
     const stats = await getStats();
-    return res.json(stats.topIps);
+    return res.json(forViewer(req, stats.topIps));
   } catch (error) {
     return next(error);
   }

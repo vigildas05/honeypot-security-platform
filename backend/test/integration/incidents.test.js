@@ -44,6 +44,12 @@ describe.skipIf(!url)("incident + metrics API (postgres)", () => {
     ]));
     const touched = await correlateNewEvents(pool, { windowMinutes: 30 });
     criticalId = /** @type {any} */ (touched.find((t) => t.src_ip === A)).id;
+    // A report whose free text mentions the IP (rule reports do: "N events from <ip>").
+    await pool.query(
+      `INSERT INTO agent_reports (incident_id, source, ai_generated, report, validation_status)
+       VALUES ($1, 'rules', false, $2, 'fallback')`,
+      [criticalId, JSON.stringify({ summary: `3 events from ${A}.`, attacker_profile: `Host ${A}`, techniques: [], severity: "critical", recommended_actions: [] })]
+    );
 
     const { default: supertest } = await import("supertest");
     const { app } = await import("../../src/app.js");
@@ -101,6 +107,13 @@ describe.skipIf(!url)("incident + metrics API (postgres)", () => {
     expect(JSON.stringify(list.body)).not.toContain(A);
     const m = await request.get("/metrics/dashboard").set("authorization", auth.demo).expect(200);
     expect(JSON.stringify(m.body)).not.toMatch(/91\.92\.9[34]\.\d/);
+    // Legacy endpoints used by the Overview page, too.
+    for (const path of ["/stats", "/attacks", "/top-ip"]) {
+      const r = await request.get(path).set("authorization", auth.demo).expect(200);
+      expect(JSON.stringify(r.body), path).not.toMatch(/91\.92\.9[34]\.\d/);
+    }
+    const adminStats = await request.get("/stats").set("authorization", auth.admin).expect(200);
+    expect(JSON.stringify(adminStats.body)).toContain(A);
   });
 
   it("serves dashboard metrics", async () => {

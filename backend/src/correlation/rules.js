@@ -87,10 +87,13 @@ export const RULES = [
     tag: "exploit-attempt",
     weight: 20,
     match: (f) => {
-      const blobs = [...f._paths, ...f._http_blobs];
-      const hits = blobs.filter((p) => EXPLOIT_PATH_PATTERNS.some((re) => re.test(p)));
-      if (!hits.length) return null;
-      return `${hits.length} request(s) to known exploit/sensitive paths, e.g. ${[...new Set(f._paths.filter((p) => EXPLOIT_PATH_PATTERNS.some((re) => re.test(p))))].slice(0, 3).join(", ") || "(in headers)"}`;
+      // One blob per HTTP request (path + user agent + headers), so each
+      // request counts once even if several of its fields match.
+      const isExploit = (/** @type {string} */ s) => EXPLOIT_PATH_PATTERNS.some((re) => re.test(s));
+      const hits = f._http_blobs.filter(isExploit).length;
+      if (!hits) return null;
+      const samples = [...new Set(f._paths.filter(isExploit))].slice(0, 3).join(", ") || "(in headers)";
+      return `${hits} request(s) to known exploit/sensitive paths, e.g. ${samples}`;
     }
   },
   {

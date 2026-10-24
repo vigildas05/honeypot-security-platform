@@ -1,4 +1,5 @@
 import express from "express";
+import { forViewer } from "../lib/mask.js";
 import { requireDashboardAuth } from "../middleware/auth.js";
 import { listAttacks } from "../services/attackService.js";
 
@@ -9,7 +10,7 @@ router.get("/attacks", requireDashboardAuth, async (req, res, next) => {
     const requested = Number(req.query.limit ?? 100);
     const limit = Number.isInteger(requested) && requested > 0 ? Math.min(requested, 500) : 100;
     const attacks = await listAttacks(limit);
-    return res.json(attacks);
+    return res.json(forViewer(req, attacks));
   } catch (error) {
     return next(error);
   }
