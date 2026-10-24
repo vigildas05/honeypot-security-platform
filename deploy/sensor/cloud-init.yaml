@@ -1,0 +1,56 @@
+#cloud-config
+# Sensor VM bootstrap for Ubuntu 22.04/24.04 (Oracle Cloud, GCP, etc.).
+# Rebuilding the sensor = destroy the VM, create a new one with this file.
+#
+# Replace before use: ADMIN_SSH_KEY, 49222 (admin port), REPO_REF.
+# Secrets are NOT in here (user-data is readable via the metadata service);
+# copy deploy/sensor/.env over SSH after boot, then run `firewall.sh confirm`.
+users:
+  - name: adminuser
+    groups: [sudo, docker]
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ADMIN_SSH_KEY
+
+package_update: true
+package_upgrade: true
+packages: [docker.io, docker-compose-v2, iptables, ipset, git, unattended-upgrades]
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-honeypot-admin.conf
+    permissions: "0644"
+    content: |
+      Port 49222
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AuthenticationMethods publickey
+      AllowUsers adminuser
+      MaxAuthTries 3
+      X11Forwarding no
+      AllowAgentForwarding no
+      AllowTcpForwarding no
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" },
+        "no-new-privileges": true, "live-restore": true, "userland-proxy": false }
+
+runcmd:
+  # 1. Move real sshd off :22 BEFORE the fake SSH sensor binds it.
+  #    (Ubuntu 22.10+ uses socket activation; disable it so Port applies.)
+  - systemctl disable --now ssh.socket || true
+  - sshd -t && systemctl enable --now ssh && systemctl restart ssh
+  # 2. Code + marker. /etc/honeypot-sensor marks this host as a sensor; the
+  #    blocklist enforcer refuses to run on any host that has it.
+  - install -d -m 0700 /etc/honeypot-sensor
+  - git clone --depth 1 --branch REPO_REF https://github.com/vigildas05/honeypot-security-platform.git /opt/honeypot
+  - install -m 0755 /opt/honeypot/deploy/sensor/firewall.sh /usr/local/sbin/honeypot-firewall
+  - install -m 0600 /opt/honeypot/deploy/sensor/firewall.conf.example /etc/honeypot-sensor/firewall.conf
+  - install -m 0644 /opt/honeypot/deploy/sensor/honeypot-firewall*.service /opt/honeypot/deploy/sensor/honeypot-firewall-refresh.timer /etc/systemd/system/
+  - systemctl daemon-reload && systemctl restart docker
+  # 3. Pull images now, while egress is open. Containers start once .env exists.
+  - cd /opt/honeypot/deploy/sensor && docker compose pull --ignore-buildable || true
+  - echo "Sensor bootstrapped. Next: edit /etc/honeypot-sensor/firewall.conf, copy .env, see docs/SENSOR.md" > /etc/motd
