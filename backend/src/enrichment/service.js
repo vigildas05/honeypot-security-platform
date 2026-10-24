@@ -145,8 +145,25 @@ export async function createEnrichmentService({
 }
 
 /**
+ * @typedef {object} IntelSummary
+ * @property {string | null} country
+ * @property {string | null} city
+ * @property {number | null} asn
+ * @property {string | null} as_org
+ * @property {number | null} abuse_confidence
+ * @property {number | null} abuse_reports
+ * @property {boolean | null} is_tor
+ * @property {number | null} vt_malicious
+ * @property {number | null} vt_suspicious
+ * @property {string | null} greynoise_classification
+ * @property {boolean | null} greynoise_noise
+ * @property {boolean | null} greynoise_riot
+ */
+
+/**
  * Merge provider outputs into the few fields the rules, agent and UI use.
  * @param {Record<string, ProviderOutcome>} outcomes
+ * @returns {IntelSummary}
  */
 export function summarize(outcomes) {
   /** @param {string} p */
@@ -156,6 +173,7 @@ export function summarize(outcomes) {
   const abuse = d("abuseipdb");
   const vt = d("virustotal");
   const gn = d("greynoise");
+  /** @returns {any} */
   const first = (/** @type {unknown[]} */ ...values) => values.find((v) => v !== undefined && v !== null) ?? null;
 
   return {
