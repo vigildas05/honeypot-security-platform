@@ -18,6 +18,9 @@ export function maskIp(ip) {
   return "x";
 }
 
+// `network`, `hostname` and `domain` (from threat intel) also identify the host.
+export const MASKED_KEYS = new Set(["ip", "src_ip", "target", "network", "hostname", "domain"]);
+
 /**
  * Recursively mask IP-valued fields (by key name) in API payloads.
  * @template T
@@ -25,7 +28,7 @@ export function maskIp(ip) {
  * @param {Set<string>} [keys]
  * @returns {T}
  */
-export function maskIpFields(value, keys = new Set(["ip", "src_ip", "target", "value_ip"])) {
+export function maskIpFields(value, keys = MASKED_KEYS) {
   if (Array.isArray(value)) return /** @type {T} */ (value.map((v) => maskIpFields(v, keys)));
   if (value && typeof value === "object" && !(value instanceof Date)) {
     /** @type {Record<string, unknown>} */

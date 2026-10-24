@@ -118,6 +118,30 @@ await boss.work(Q_EXPIRE, async () => {
 });
 await boss.schedule(Q_EXPIRE, "* * * * *");
 
+// Heartbeat with non-secret runtime config, so the dashboard can show whether
+// the worker is alive, which model/providers it uses, and its budgets.
+async function heartbeat(first = false) {
+  const data = {
+    llm_model: llm?.model ?? null,
+    llm_daily_call_budget: agentConfig.llm.dailyCallBudget,
+    llm_daily_token_budget: agentConfig.llm.dailyTokenBudget,
+    intel_providers: enrichment.enabledProviders,
+    incident_window_minutes: agentConfig.incidentWindowMinutes,
+    debounce_seconds: agentConfig.debounceSeconds,
+    max_block_ttl_hours: agentConfig.policy.maxBlockTtlHours
+  };
+  await pool
+    .query(
+      `INSERT INTO runtime_status (component, data, started_at, updated_at) VALUES ('worker', $1, NOW(), NOW())
+       ON CONFLICT (component) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+         ${first ? ", started_at = NOW()" : ""}`,
+      [JSON.stringify(data)]
+    )
+    .catch((error) => console.error("heartbeat failed:", error.message));
+}
+await heartbeat(true);
+const heartbeatTimer = setInterval(() => void heartbeat(), 60_000);
+
 const interval = setInterval(correlateTick, agentConfig.correlateIntervalSeconds * 1000);
 void correlateTick();
 
@@ -139,6 +163,7 @@ const healthServer = healthPort
 
 async function shutdown() {
   clearInterval(interval);
+  clearInterval(heartbeatTimer);
   healthServer?.close();
   await boss.stop({ graceful: true, timeout: 20_000 }).catch(() => {});
   lockClient?.release();

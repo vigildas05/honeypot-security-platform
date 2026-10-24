@@ -22,7 +22,9 @@ export async function loadMigrations(dir = MIGRATIONS_DIR) {
         version: file.slice(0, 3),
         file,
         sql,
-        checksum: crypto.createHash("sha256").update(sql).digest("hex")
+        // Hash with normalized line endings so a Windows (autocrlf) checkout and
+        // a Linux CI/container produce the same checksum.
+        checksum: crypto.createHash("sha256").update(sql.replace(/\r\n/g, "\n")).digest("hex")
       };
     })
   );

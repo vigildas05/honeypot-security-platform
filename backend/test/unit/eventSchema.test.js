@@ -51,16 +51,21 @@ describe("sanitizeString", () => {
     expect(sanitizeString("a\u0000b\u001b[31m", 100).value).toBe("a\\x00b\\x1b[31m");
   });
 
+  it("escapes bidi override characters (Trojan Source style spoofing)", () => {
+    expect(sanitizeString("admin\u202egnp.exe", 100).value).toBe("admin\\u{202e}gnp.exe");
+    expect(sanitizeString("a\u2066b\u2069", 100).value).toBe("a\\u{2066}b\\u{2069}");
+  });
+
   it("keeps tabs and newlines", () => {
     expect(sanitizeString("a\tb\nc", 100).value).toBe("a\tb\nc");
   });
 
   it("replaces lone surrogates", () => {
-    expect(sanitizeString("x\ud800y", 100).value).toBe("x�y");
+    expect(sanitizeString("x\ud800y", 100).value).toBe("x\ufffdy");
   });
 
   it("truncates without splitting a surrogate pair", () => {
-    const r = sanitizeString("ab😀cd", 3);
+    const r = sanitizeString(`ab${String.fromCodePoint(0x1f600)}cd`, 3);
     expect(r).toEqual({ value: "ab", truncated: true });
   });
 });
