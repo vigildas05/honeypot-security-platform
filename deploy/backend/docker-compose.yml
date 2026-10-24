@@ -1,0 +1,148 @@
+# Self-hosted backend (a second VM, or local). For the managed setup
+# (Render + Neon + Vercel) see docs/DEPLOYMENT.md instead.
+#
+#   docker compose up -d                  # API on 127.0.0.1:8000, dashboard on 127.0.0.1:3000
+#   docker compose --profile tls up -d    # + Caddy with automatic HTTPS on :80/:443
+#
+# Nothing here is reachable from outside except through Caddy (tls profile).
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:size=32m,noexec,nosuid,nodev
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:-postgresql://honeypot:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/honeypot}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+  SENSOR_TOKENS: ${SENSOR_TOKENS:?set SENSOR_TOKENS}
+  NEVER_BLOCK_IPS: ${NEVER_BLOCK_IPS:-}
+  BLOCK_MAX_TTL_HOURS: ${BLOCK_MAX_TTL_HOURS:-168}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: honeypot
+      POSTGRES_USER: honeypot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U honeypot"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  migrate:
+    <<: *hardening
+    image: ${BACKEND_IMAGE:-ghcr.io/vigildas05/honeypot-backend:latest}
+    build: ../../backend
+    environment:
+      <<: *backend-env
+      DASHBOARD_ADMIN_USERNAME: ${DASHBOARD_ADMIN_USERNAME:-admin}
+      DASHBOARD_ADMIN_PASSWORD: ${DASHBOARD_ADMIN_PASSWORD:?set DASHBOARD_ADMIN_PASSWORD (12+ chars)}
+      DASHBOARD_DEMO_USERNAME: ${DASHBOARD_DEMO_USERNAME:-}
+      DASHBOARD_DEMO_PASSWORD: ${DASHBOARD_DEMO_PASSWORD:-}
+    command: ["node", "src/db/migrate.js"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *hardening
+    image: ${BACKEND_IMAGE:-ghcr.io/vigildas05/honeypot-backend:latest}
+    build: ../../backend
+    environment:
+      <<: *backend-env
+      BACKEND_PORT: 8000
+      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS (dashboard origin)}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      EDL_AUTH_MODE: ${EDL_AUTH_MODE:-token}
+      EDL_TOKEN: ${EDL_TOKEN:-}
+      EDL_BASIC_USER: ${EDL_BASIC_USER:-}
+      EDL_BASIC_PASSWORD: ${EDL_BASIC_PASSWORD:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 384m
+    cpus: 1.0
+
+  worker:
+    <<: *hardening
+    image: ${BACKEND_IMAGE:-ghcr.io/vigildas05/honeypot-backend:latest}
+    build: ../../backend
+    command: ["node", "src/worker.js"]
+    environment:
+      <<: *backend-env
+      WORKER_HEALTH_PORT: 8000
+      INCIDENT_WINDOW_MINUTES: ${INCIDENT_WINDOW_MINUTES:-30}
+      AGENT_DEBOUNCE_SECONDS: ${AGENT_DEBOUNCE_SECONDS:-120}
+      EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-30}
+      INCIDENT_RETENTION_DAYS: ${INCIDENT_RETENTION_DAYS:-90}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_DAILY_CALL_BUDGET: ${LLM_DAILY_CALL_BUDGET:-200}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-300000}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 384m
+    cpus: 1.0
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/vigildas05/honeypot-frontend:latest}
+    build:
+      context: ../../frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?set VITE_API_BASE_URL (public API URL)}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m
+    ports:
+      - "127.0.0.1:3000:8080"
+    restart: unless-stopped
+    mem_limit: 64m
+
+  caddy:
+    profiles: [tls]
+    image: caddy:2.8-alpine
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-}
+      DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on: [api, frontend]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  pgdata:
+  caddy-data:
+  caddy-config:

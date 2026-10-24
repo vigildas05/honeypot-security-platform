@@ -15,13 +15,16 @@ import { pool } from "./db/pool.js";
 import { createEnrichmentService } from "./enrichment/service.js";
 import { incrementCounters } from "./lib/metrics.js";
 import { expireActions } from "./services/actionService.js";
+import { applyRetention, loadRetentionConfig } from "./services/retention.js";
 
 const Q_ENRICH = "enrich-ip";
 const Q_ANALYZE = "analyze-incident";
 const Q_EXPIRE = "expire-actions";
+const Q_RETENTION = "data-retention";
 const CORRELATOR_LOCK = 727275;
 
 const agentConfig = loadAgentConfig(process.env);
+const retentionConfig = loadRetentionConfig(process.env);
 const policy = createPolicyEngine(agentConfig.policy); // throws on a bad NEVER_BLOCK_IPS entry
 const llm = llmConfigured(agentConfig) ? createOpenAICompatibleClient(agentConfig.llm) : null;
 const budget = createDbBudget(pool, agentConfig.llm);
@@ -117,6 +120,14 @@ await boss.work(Q_EXPIRE, async () => {
   if (n) console.log(`expired ${n} action(s)`);
 });
 await boss.schedule(Q_EXPIRE, "* * * * *");
+
+await boss.createQueue(Q_RETENTION, { policy: "singleton" });
+await boss.work(Q_RETENTION, async () => {
+  const r = await applyRetention(pool, retentionConfig);
+  console.log(`retention: ${JSON.stringify(r)}`);
+  await incrementCounters(pool, { "retention.events_deleted": r.events, "retention.incidents_deleted": r.incidents });
+});
+await boss.schedule(Q_RETENTION, "17 3 * * *"); // daily, 03:17 UTC
 
 // Heartbeat with non-secret runtime config, so the dashboard can show whether
 // the worker is alive, which model/providers it uses, and its budgets.
