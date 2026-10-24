@@ -1,0 +1,14 @@
+[Unit]
+Description=Apply honeypot EDL blocklist with ipset
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/honeypot-enforcer --config /etc/honeypot-enforcer.conf
+# Needs root for ipset/iptables, but nothing else.
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW

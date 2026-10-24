@@ -129,7 +129,21 @@ export function createPolicyEngine(policy) {
     return { allowed: final, violations };
   }
 
-  return { evaluate, isNeverBlock };
+  /**
+   * Standalone target check, re-run at approval time and when serving the
+   * blocklist (defense in depth: config may have changed since proposal).
+   * @param {string} ip
+   * @returns {{ ok: boolean, code?: string }}
+   */
+  function isAllowedTarget(ip) {
+    const c = classifyIp(ip);
+    if (!c.valid || !c.ip) return { ok: false, code: "target_invalid" };
+    if (!c.public) return { ok: false, code: "target_non_public" };
+    if (isNeverBlock(c.ip)) return { ok: false, code: "target_never_block" };
+    return { ok: true };
+  }
+
+  return { evaluate, isNeverBlock, isAllowedTarget };
 }
 
 /** Keep logged copies of rejected actions small and inert. @param {unknown} action */

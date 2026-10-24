@@ -93,6 +93,22 @@ export function loadConfig(raw) {
     }
   }
 
+  const edlMode = raw.EDL_AUTH_MODE ?? "token";
+  if (!["token", "basic", "both"].includes(edlMode)) {
+    problems.push("EDL_AUTH_MODE must be token, basic or both");
+  }
+  const edlToken = raw.EDL_TOKEN ?? "";
+  const edlUser = raw.EDL_BASIC_USER ?? "";
+  const edlPassword = raw.EDL_BASIC_PASSWORD ?? "";
+  if (isProduction) {
+    if (edlMode !== "basic" && edlToken && edlToken.length < 24) {
+      problems.push("EDL_TOKEN must be at least 24 characters");
+    }
+    if (edlMode !== "token" && edlUser && edlPassword.length < 16) {
+      problems.push("EDL_BASIC_PASSWORD must be at least 16 characters");
+    }
+  }
+
   if (problems.length > 0) {
     throw new Error(`Refusing to start with unsafe configuration:\n - ${problems.join("\n - ")}`);
   }
@@ -119,7 +135,14 @@ export function loadConfig(raw) {
     ingestMaxBatch: int(raw.INGEST_MAX_BATCH, 100),
     ingestRateLimitPerMinute: int(raw.INGEST_RATE_LIMIT_PER_MINUTE, 1200),
     apiRateLimitPerMinute: int(raw.API_RATE_LIMIT_PER_MINUTE, 300),
-    loginRateLimitPer15Min: int(raw.LOGIN_RATE_LIMIT_PER_15MIN, 10)
+    loginRateLimitPer15Min: int(raw.LOGIN_RATE_LIMIT_PER_15MIN, 10),
+    /** Firewall External Dynamic List. Disabled (404) unless credentials are configured. */
+    edl: {
+      mode: /** @type {"token" | "basic" | "both"} */ (edlMode),
+      token: edlToken,
+      basicUser: edlUser,
+      basicPassword: edlPassword
+    }
   };
 }
 

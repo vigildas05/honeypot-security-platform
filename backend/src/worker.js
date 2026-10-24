@@ -14,6 +14,7 @@ import { closeIdleIncidents, correlateNewEvents, rescoreIncident } from "./corre
 import { pool } from "./db/pool.js";
 import { createEnrichmentService } from "./enrichment/service.js";
 import { incrementCounters } from "./lib/metrics.js";
+import { expireActions } from "./services/actionService.js";
 
 const Q_ENRICH = "enrich-ip";
 const Q_ANALYZE = "analyze-incident";
@@ -112,13 +113,10 @@ await boss.work(Q_ANALYZE, async (/** @type {any[]} */ [job]) => {
 });
 
 await boss.work(Q_EXPIRE, async () => {
-  const r = await pool.query(
-    `UPDATE proposed_actions SET status = 'expired'
-     WHERE status = 'active' AND expires_at <= NOW() RETURNING id`
-  );
-  if (r.rowCount) console.log(`expired ${r.rowCount} block(s)`);
+  const n = await expireActions(pool);
+  if (n) console.log(`expired ${n} action(s)`);
 });
-await boss.schedule(Q_EXPIRE, "*/5 * * * *");
+await boss.schedule(Q_EXPIRE, "* * * * *");
 
 const interval = setInterval(correlateTick, agentConfig.correlateIntervalSeconds * 1000);
 void correlateTick();
