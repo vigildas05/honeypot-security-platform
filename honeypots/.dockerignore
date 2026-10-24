@@ -1,0 +1,9 @@
+**/node_modules
+**/.env
+test
+coverage
+*.log
+package.json
+package-lock.json
+eslint.config.js
+tsconfig.json

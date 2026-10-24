@@ -13,8 +13,8 @@ import { apiGet, login } from "./api/client.js";
 import "./styles.css";
 
 function Login({ onLogin }) {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   async function handleSubmit(event) {

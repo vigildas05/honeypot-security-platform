@@ -1,3 +1,5 @@
+# Local all-in-one development stack. For real deployments use
+# deploy/sensor/ and deploy/backend/ instead.
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,7 +8,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-honeypot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-honeypot_password}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -22,16 +24,21 @@ services:
       BACKEND_PORT: 8000
       DATABASE_URL: postgresql://${POSTGRES_USER:-honeypot}:${POSTGRES_PASSWORD:-honeypot_password}@postgres:5432/${POSTGRES_DB:-honeypot}
       CORS_ORIGINS: http://localhost:5173,http://localhost:3000
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-dev-secret}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me-dev-only-change-me}
       DASHBOARD_ADMIN_USERNAME: ${DASHBOARD_ADMIN_USERNAME:-admin}
       DASHBOARD_ADMIN_PASSWORD: ${DASHBOARD_ADMIN_PASSWORD:-admin123}
+      DASHBOARD_DEMO_USERNAME: ${DASHBOARD_DEMO_USERNAME:-demo}
+      DASHBOARD_DEMO_PASSWORD: ${DASHBOARD_DEMO_PASSWORD:-demo-password}
+      # One token per sensor; the backend binds each event's sensor_id to its token.
+      SENSOR_TOKENS: dev-http:${HTTP_SENSOR_TOKEN:-dev-http-sensor-token},dev-ssh:${SSH_SENSOR_TOKEN:-dev-ssh-sensor-token}
+      # Legacy shared token still accepted on POST /attack and /ingest.
       HONEYPOT_API_TOKEN: ${HONEYPOT_API_TOKEN:-dev-honeypot-token}
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
-    command: sh -c "npm run migrate && npm start"
+    command: sh -c "node src/db/migrate.js && node src/server.js"
 
   frontend:
     build: ./frontend
@@ -41,22 +48,32 @@ services:
       - backend
 
   http-honeypot:
-    build: ./honeypots/http
+    build:
+      context: ./honeypots
+      dockerfile: http/Dockerfile
     environment:
+      NODE_ENV: development
       HTTP_HONEYPOT_PORT: 8080
-      BACKEND_ATTACK_ENDPOINT: http://backend:8000/attack
-      HONEYPOT_API_TOKEN: ${HONEYPOT_API_TOKEN:-dev-honeypot-token}
+      SENSOR_ID: dev-http
+      SENSOR_INGEST_URL: http://backend:8000/ingest/v1/events
+      SENSOR_INGEST_TOKEN: ${HTTP_SENSOR_TOKEN:-dev-http-sensor-token}
     ports:
       - "8080:8080"
     depends_on:
       - backend
 
   ssh-honeypot:
-    build: ./honeypots/ssh
+    build:
+      context: ./honeypots
+      dockerfile: ssh/Dockerfile
     environment:
+      NODE_ENV: development
       SSH_HONEYPOT_PORT: 2222
-      BACKEND_ATTACK_ENDPOINT: http://backend:8000/attack
-      HONEYPOT_API_TOKEN: ${HONEYPOT_API_TOKEN:-dev-honeypot-token}
+      SENSOR_ID: dev-ssh
+      SENSOR_INGEST_URL: http://backend:8000/ingest/v1/events
+      SENSOR_INGEST_TOKEN: ${SSH_SENSOR_TOKEN:-dev-ssh-sensor-token}
+    volumes:
+      - ssh-hostkey:/data
     ports:
       - "2222:2222"
     depends_on:
@@ -64,3 +81,4 @@ services:
 
 volumes:
   postgres-data:
+  ssh-hostkey:
