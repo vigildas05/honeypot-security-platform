@@ -133,6 +133,8 @@ export const wireEventSchema = z.discriminatedUnion("protocol", [sshEvent, httpE
  * - lone UTF-16 surrogates become U+FFFD
  * - NUL and other control chars (except \t \n \r) become visible \xNN escapes
  *   (Postgres rejects NUL; raw ESC sequences are a log/terminal injection risk)
+ * - bidirectional override/isolate controls become visible \u{NNNN} escapes
+ *   (they let attacker text visually reorder what an analyst sees)
  * - truncated to `max` code units without splitting a surrogate pair
  * @param {string | undefined | null} value
  * @param {number} max
@@ -145,6 +147,9 @@ export function sanitizeString(value, max) {
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, (c) =>
       `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`
+    )
+    .replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, (c) =>
+      `\\u{${c.charCodeAt(0).toString(16)}}`
     );
   let truncated = false;
   if (out.length > max) {

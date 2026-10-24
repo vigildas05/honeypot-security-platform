@@ -10,6 +10,7 @@ import actionRoutes from "./routes/actions.js";
 import attackRoutes from "./routes/attacks.js";
 import authRoutes from "./routes/auth.js";
 import edlRoutes from "./routes/edl.js";
+import incidentRoutes from "./routes/incidents.js";
 import ingestRoutes from "./routes/ingest.js";
 import statsRoutes from "./routes/stats.js";
 
@@ -20,7 +21,13 @@ app.disable("x-powered-by");
 app.set("trust proxy", env.trustProxy);
 
 app.use(requestId);
-app.use(helmet());
+app.use(
+  helmet({
+    // JSON-only API: nothing it returns should ever be rendered as a document.
+    contentSecurityPolicy: { useDefaults: false, directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"], baseUri: ["'none'"], formAction: ["'none'"] } },
+    crossOriginResourcePolicy: { policy: "same-site" }
+  })
+);
 app.use(express.json({ limit: "256kb" }));
 app.use(
   cors({
@@ -62,6 +69,7 @@ app.use("/auth", authRoutes);
 app.use(attackRoutes);
 app.use(statsRoutes);
 app.use(actionRoutes);
+app.use(incidentRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
