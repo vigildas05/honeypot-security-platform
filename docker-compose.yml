@@ -40,6 +40,33 @@ services:
         condition: service_healthy
     command: sh -c "node src/db/migrate.js && node src/server.js"
 
+  # Correlation, threat-intel enrichment and the SOC agent. Same image as the
+  # backend. LLM and threat-intel keys are optional and only ever given here.
+  worker:
+    build: ./backend
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-honeypot}:${POSTGRES_PASSWORD:-honeypot_password}@postgres:5432/${POSTGRES_DB:-honeypot}
+      # Liveness endpoint on localhost so the image's HEALTHCHECK works for the worker too.
+      WORKER_HEALTH_PORT: 8000
+      INCIDENT_WINDOW_MINUTES: ${INCIDENT_WINDOW_MINUTES:-30}
+      AGENT_DEBOUNCE_SECONDS: ${AGENT_DEBOUNCE_SECONDS:-15}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_DAILY_CALL_BUDGET: ${LLM_DAILY_CALL_BUDGET:-200}
+      LLM_DAILY_TOKEN_BUDGET: ${LLM_DAILY_TOKEN_BUDGET:-300000}
+      NEVER_BLOCK_IPS: ${NEVER_BLOCK_IPS:-}
+      BLOCK_MAX_TTL_HOURS: ${BLOCK_MAX_TTL_HOURS:-168}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: ["node", "src/worker.js"]
+
   frontend:
     build: ./frontend
     ports:

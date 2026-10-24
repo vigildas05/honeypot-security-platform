@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "worker": "node src/worker.js",
+    "test:security": "vitest run test/security"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -23,6 +25,7 @@
     "jsonwebtoken": "^9.0.2",
     "maxmind": "^5.0.7",
     "pg": "^8.12.0",
+    "pg-boss": "^12.37.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
