@@ -179,7 +179,7 @@ export const RULES = [
   {
     id: "T1222.002",
     name: "Linux and Mac File and Directory Permissions Modification",
-    tactic: "defense-evasion",
+    tactic: "defense-impairment",
     tag: "defense-evasion",
     weight: 5,
     match: (f) => {
@@ -190,7 +190,7 @@ export const RULES = [
   {
     id: "T1070.003",
     name: "Indicator Removal: Clear Command History",
-    tactic: "defense-evasion",
+    tactic: "stealth",
     tag: "defense-evasion",
     weight: 10,
     match: (f) => {
