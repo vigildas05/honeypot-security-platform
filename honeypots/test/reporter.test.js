@@ -12,6 +12,13 @@ describe("loadSensorConfig", () => {
     ).toThrow(/https[\s\S]*SENSOR_INGEST_TOKEN/);
   });
 
+  it.each(["DATABASE_URL", "LLM_API_KEY", "ABUSEIPDB_API_KEY", "JWT_SECRET_KEY", "EDL_TOKEN"])(
+    "refuses to start when a backend secret (%s) is present, in any mode",
+    (name) => {
+      expect(() => loadSensorConfig({ NODE_ENV: "development", [name]: "x" })).toThrow(new RegExp(`remove: ${name}`));
+    }
+  );
+
   it("accepts a valid production config", () => {
     const cfg = loadSensorConfig({
       NODE_ENV: "production",

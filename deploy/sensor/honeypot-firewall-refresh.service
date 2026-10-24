@@ -1,0 +1,6 @@
+[Unit]
+Description=Re-resolve the backend ingest host into the egress allowlist
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/honeypot-firewall refresh

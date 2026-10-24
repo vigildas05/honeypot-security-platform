@@ -17,8 +17,8 @@ const { Server } = ssh2;
 
 const port = Number(process.env.SSH_HONEYPOT_PORT ?? 2222);
 const hostKeyPath = process.env.SSH_HOST_KEY_PATH ?? "/data/ssh_host_rsa_key";
-const hostname = process.env.SSH_FAKE_HOSTNAME ?? "srv-web-01";
-const accepted = parseAcceptedCredentials(process.env.SSH_ACCEPT_CREDENTIALS ?? DEFAULT_ACCEPTED_CREDENTIALS);
+const hostname = process.env.SSH_FAKE_HOSTNAME || "srv-web-01";
+const accepted = parseAcceptedCredentials(process.env.SSH_ACCEPT_CREDENTIALS || DEFAULT_ACCEPTED_CREDENTIALS);
 
 const LIMITS = {
   maxConnections: Number(process.env.SSH_MAX_CONNECTIONS ?? 200),

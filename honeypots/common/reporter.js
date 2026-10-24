@@ -6,6 +6,15 @@
 
 const DEFAULT_DEV_TOKEN = "dev-honeypot-token";
 
+/** Backend-only secrets. A sensor refuses to start if any of these is set. */
+export const FORBIDDEN_SENSOR_ENV = [
+  "DATABASE_URL", "POSTGRES_PASSWORD", "PGPASSWORD", "JWT_SECRET_KEY", "SENSOR_TOKENS",
+  "DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_DEMO_PASSWORD",
+  "LLM_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "NVIDIA_API_KEY",
+  "ABUSEIPDB_API_KEY", "VIRUSTOTAL_API_KEY", "GREYNOISE_API_KEY", "IPINFO_TOKEN",
+  "EDL_TOKEN", "EDL_BASIC_PASSWORD"
+];
+
 /**
  * Read and validate sensor config from env. Fails closed in production.
  * @param {NodeJS.ProcessEnv} env
@@ -17,6 +26,11 @@ export function loadSensorConfig(env) {
   const sensorId = env.SENSOR_ID ?? "";
 
   const problems = [];
+  // The sensor is the attacked host: it must hold nothing but its ingest token.
+  const leaked = FORBIDDEN_SENSOR_ENV.filter((name) => env[name]);
+  if (leaked.length > 0) {
+    problems.push(`backend secrets must never be given to a sensor; remove: ${leaked.join(", ")}`);
+  }
   let url;
   try {
     url = new URL(ingestUrl);
