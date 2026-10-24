@@ -123,11 +123,15 @@ export function Incidents() {
                 <td><SeverityBadge level={i.severity} /> <span className="muted">{i.severity_score}</span></td>
                 <td><code className="ip">{i.src_ip}</code>{i.country ? <span className="muted"> {i.country}</span> : null}</td>
                 <td>{i.event_count}</td>
-                <td className="wrap">
-                  {(i.technique_ids ?? []).slice(0, 4).map((/** @type {string} */ t) => <TechniqueLink key={t} id={t} />)}
-                  {(i.technique_ids ?? []).length > 4 ? <span className="muted"> +{i.technique_ids.length - 4}</span> : null}
+                <td>
+                  <div className="wrap">
+                    {(i.technique_ids ?? []).slice(0, 4).map((/** @type {string} */ t) => <TechniqueLink key={t} id={t} />)}
+                    {(i.technique_ids ?? []).length > 4 ? <span className="muted"> +{i.technique_ids.length - 4}</span> : null}
+                  </div>
                 </td>
-                <td className="wrap">{(i.tags ?? []).map((/** @type {string} */ t) => <Tag key={t} tag={t} />)}</td>
+                <td>
+                  <div className="wrap">{(i.tags ?? []).map((/** @type {string} */ t) => <Tag key={t} tag={t} />)}</div>
+                </td>
                 <td><Time value={i.last_seen} /></td>
                 <td>
                   {i.status}
