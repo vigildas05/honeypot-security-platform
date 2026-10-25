@@ -16,7 +16,7 @@
     "@types/ssh2": "^1.15.6",
     "eslint": "^9.39.5",
     "globals": "^17.13.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.12"
   }
 }
