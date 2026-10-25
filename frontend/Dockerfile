@@ -1,6 +1,6 @@
 # Static output is architecture-independent: build natively on the CI runner
 # (esbuild crashes with SIGILL under QEMU), emulate only the nginx stage.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts && npm rebuild esbuild
