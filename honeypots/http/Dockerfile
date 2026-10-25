@@ -1,5 +1,5 @@
 # Build context: ./honeypots  (so the shared common/ module is available)
-FROM node:22-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app/http
 COPY http/package.json http/package-lock.json ./
 # --ignore-scripts: no install hooks; ssh2's optional native addon isn't needed.
