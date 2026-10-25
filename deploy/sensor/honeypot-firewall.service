@@ -1,0 +1,13 @@
+[Unit]
+Description=Honeypot sensor firewall (lockdown)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# At boot there is no one to confirm, so apply without the rollback timer.
+ExecStart=/usr/local/sbin/honeypot-firewall lockdown --no-rollback
+
+[Install]
+WantedBy=multi-user.target

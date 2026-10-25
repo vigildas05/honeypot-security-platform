@@ -1,0 +1,13 @@
+# /etc/honeypot-sensor/firewall.conf (chmod 600)
+ADMIN_SSH_PORT=49222
+# Optional: restrict admin SSH to your IP(s). Empty = any (key-only still applies).
+ADMIN_SOURCE_CIDRS=
+# Backend hostname that sensors POST to (resolved into an ipset, refreshed every 5 min).
+INGEST_HOST=YOUR-BACKEND.example.com
+INGEST_PORT=443
+# Defaults to the system resolvers; OCI/GCP use 169.254.169.254.
+DNS_SERVERS=
+NTP_SERVERS=169.254.169.254
+ALLOW_HOST_METADATA=true
+# Admin access via Tailscale instead of a public port (see docs/SENSOR.md).
+TAILSCALE=false
