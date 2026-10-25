@@ -59,6 +59,19 @@ function parseTrustProxy(value) {
 }
 
 /**
+ * Tidy a database URL pasted into a hosting dashboard: trim whitespace and one
+ * pair of surrounding quotes. Returns "" for unset/blank values.
+ * @param {string | undefined} value
+ */
+export function cleanDatabaseUrl(value) {
+  let v = (value ?? "").trim();
+  if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v.at(-1) === v[0]) v = v.slice(1, -1).trim();
+  return v;
+}
+
+const DB_URL_RE = /^postgres(ql)?:\/\/[^\s]+$/i;
+
+/**
  * Build the runtime config. In production, missing or weak secrets are fatal
  * (fail closed) instead of silently falling back to dev defaults.
  * @param {NodeJS.ProcessEnv} raw
@@ -79,8 +92,19 @@ export function loadConfig(raw) {
 
   const jwtSecret = raw.JWT_SECRET_KEY ?? (isProduction ? "" : DEV_JWT_SECRET);
 
+  const databaseUrl = cleanDatabaseUrl(raw.DATABASE_URL);
+  const databaseUrlUnpooled = cleanDatabaseUrl(raw.DATABASE_URL_UNPOOLED);
+  // Never echo the value: it contains the database password.
+  for (const [name, value] of [["DATABASE_URL", databaseUrl], ["DATABASE_URL_UNPOOLED", databaseUrlUnpooled]]) {
+    if (value && !DB_URL_RE.test(value)) {
+      problems.push(
+        `${name} must be one line starting with postgres:// or postgresql:// (check for a "${name}=" or "psql" prefix, spaces or line breaks)`
+      );
+    }
+  }
+
   if (isProduction) {
-    if (!raw.DATABASE_URL) problems.push("DATABASE_URL is required");
+    if (!databaseUrl) problems.push("DATABASE_URL is required");
     if (jwtSecret.length < 32 || KNOWN_WEAK_SECRETS.has(jwtSecret)) {
       problems.push("JWT_SECRET_KEY must be set to a random value of at least 32 characters");
     }
@@ -117,17 +141,14 @@ export function loadConfig(raw) {
     nodeEnv,
     isProduction,
     port: int(raw.BACKEND_PORT ?? raw.PORT, 8000),
-    databaseUrl:
-      raw.DATABASE_URL ?? "postgresql://honeypot:honeypot_password@localhost:5432/honeypot",
+    databaseUrl: databaseUrl || "postgresql://honeypot:honeypot_password@localhost:5432/honeypot",
     /**
      * Direct (non-pooled) connection for migrations and the worker, which need
      * session state (pg-boss, session advisory locks). On Neon this is
      * DATABASE_URL_UNPOOLED; elsewhere it falls back to DATABASE_URL.
      */
     databaseUrlDirect:
-      raw.DATABASE_URL_UNPOOLED ||
-      raw.DATABASE_URL ||
-      "postgresql://honeypot:honeypot_password@localhost:5432/honeypot",
+      databaseUrlUnpooled || databaseUrl || "postgresql://honeypot:honeypot_password@localhost:5432/honeypot",
     corsOrigins: (raw.CORS_ORIGINS ?? "http://localhost:5173")
       .split(",")
       .map((origin) => origin.trim())

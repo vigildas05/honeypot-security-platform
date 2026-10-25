@@ -34,3 +34,25 @@ describe("withVerifiedTls", async () => {
     expect(withVerifiedTls("postgresql://h/db?sslmode=disable")).toBe("postgresql://h/db?sslmode=disable");
   });
 });
+
+describe("database URL hygiene", () => {
+  const good = "postgresql://u:secretpw@ep-x.neon.tech/db?sslmode=require";
+  const prod = { NODE_ENV: "production", JWT_SECRET_KEY: "x".repeat(40), SENSOR_TOKENS: `s:${"t".repeat(30)}` };
+
+  it("strips surrounding quotes and whitespace from pasted URLs", () => {
+    expect(loadConfig({ DATABASE_URL: `  "${good}"\n` }).databaseUrl).toBe(good);
+    expect(loadConfig({ DATABASE_URL: good, DATABASE_URL_UNPOOLED: ` '${good}' ` }).databaseUrlDirect).toBe(good);
+  });
+
+  it.each([
+    ["a DATABASE_URL= prefix", `DATABASE_URL=${good}`],
+    ["a psql prefix", `psql '${good}'`],
+    ["a line break inside", good.replace("?", "?\n")],
+    ["no scheme", "ep-x.neon.tech/db"]
+  ])("fails clearly on %s, without echoing the password", (_name, value) => {
+    let message = "";
+    try { loadConfig({ ...prod, DATABASE_URL: value }); } catch (e) { message = String(e); }
+    expect(message).toMatch(/DATABASE_URL must be one line starting with postgres/);
+    expect(message).not.toContain("secretpw");
+  });
+});
