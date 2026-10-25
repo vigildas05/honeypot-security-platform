@@ -12,7 +12,8 @@ services:
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
     # Free plan has no pre-deploy hook, so migrate on start (idempotent, advisory-locked).
-    dockerCommand: sh -c "node src/db/migrate.js && node src/server.js"
+    # Render runs dockerCommand without a shell, so `&&` chaining lives in an npm script.
+    dockerCommand: npm run start:prod
     healthCheckPath: /health/ready
     autoDeploy: true
     envVars:
