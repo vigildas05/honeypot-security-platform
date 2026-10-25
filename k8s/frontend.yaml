@@ -6,19 +6,32 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: frontend
+    matchLabels: { app: frontend }
   template:
     metadata:
-      labels:
-        app: frontend
+      labels: { app: frontend }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: frontend
-          image: honeypot-frontend:local
-          imagePullPolicy: Never
-          ports:
-            - containerPort: 80
+          # VITE_API_BASE_URL is baked in at build time; rebuild for your API URL.
+          image: ghcr.io/vigildas05/honeypot-frontend:latest
+          ports: [{ containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+          resources:
+            requests: { cpu: 20m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: Service
@@ -27,9 +40,5 @@ metadata:
   namespace: security-platform
 spec:
   type: NodePort
-  selector:
-    app: frontend
-  ports:
-    - port: 80
-      targetPort: 80
-      nodePort: 30080
+  selector: { app: frontend }
+  ports: [{ port: 80, targetPort: 8080, nodePort: 30080 }]

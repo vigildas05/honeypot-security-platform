@@ -6,25 +6,49 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: backend
+    matchLabels: { app: backend }
   template:
     metadata:
-      labels:
-        app: backend
+      labels: { app: backend }
     spec:
-      containers:
-        - name: backend
-          image: honeypot-backend:local
-          imagePullPolicy: Never
-          command: ["sh", "-c", "npm run migrate && npm start"]
-          ports:
-            - containerPort: 8000
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      initContainers:
+        - name: migrate
+          image: ghcr.io/vigildas05/honeypot-backend:latest
+          command: ["node", "src/db/migrate.js"]
           envFrom:
-            - configMapRef:
-                name: honeypot-config
-            - secretRef:
-                name: honeypot-secrets
+            - configMapRef: { name: backend-config }
+            - secretRef: { name: backend-secrets }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      containers:
+        - name: api
+          image: ghcr.io/vigildas05/honeypot-backend:latest
+          ports: [{ containerPort: 8000 }]
+          envFrom:
+            - configMapRef: { name: backend-config }
+            - secretRef: { name: backend-secrets }
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 8000 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: { sizeLimit: 32Mi } }]
 ---
 apiVersion: v1
 kind: Service
@@ -32,8 +56,5 @@ metadata:
   name: backend
   namespace: security-platform
 spec:
-  selector:
-    app: backend
-  ports:
-    - port: 8000
-      targetPort: 8000
+  selector: { app: backend }
+  ports: [{ port: 8000, targetPort: 8000 }]

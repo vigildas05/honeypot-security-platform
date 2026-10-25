@@ -1,0 +1,13 @@
+# /etc/honeypot-enforcer.conf  (chmod 600, owned by root)
+EDL_URL=https://YOUR-BACKEND.example.com/edl/blocklist.txt
+
+# Either token auth (EDL_AUTH_MODE=token on the backend)...
+EDL_TOKEN=
+
+# ...or basic auth (EDL_AUTH_MODE=basic)
+#EDL_USER=firewall
+#EDL_PASSWORD=
+
+# Refuse updates larger than this (protects against a runaway list).
+MAX_ENTRIES=50000
+ALLOWLIST_FILE=/etc/honeypot-enforcer.allow

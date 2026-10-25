@@ -1,14 +1,29 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { env } from "../config/env.js";
+import { createUserIfMissing } from "../services/userService.js";
+import { runMigrations } from "./migrations.js";
 import { pool } from "./pool.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const schemaPath = path.resolve(__dirname, "../../sql/schema.sql");
+const WEAK_PASSWORDS = new Set(["admin", "admin123", "password", "changeme", "demo"]);
+
+/**
+ * @param {string} username
+ * @param {string} password
+ * @param {"admin" | "demo"} role
+ */
+async function seedUser(username, password, role) {
+  if (!username || !password) return;
+  if (env.isProduction && (password.length < 12 || WEAK_PASSWORDS.has(password))) {
+    throw new Error(`Refusing to seed ${role} user "${username}" with a weak password in production`);
+  }
+  if (await createUserIfMissing(pool, { username, password, role })) {
+    console.log(`Created ${role} user "${username}".`);
+  }
+}
 
 async function migrate() {
-  const sql = await fs.readFile(schemaPath, "utf8");
-  await pool.query(sql);
+  await runMigrations(pool);
+  await seedUser(env.seedAdminUser, env.seedAdminPassword, "admin");
+  await seedUser(env.seedDemoUser, env.seedDemoPassword, "demo");
   console.log("Database schema is ready.");
   await pool.end();
 }

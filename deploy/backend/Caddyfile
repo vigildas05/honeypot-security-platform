@@ -1,0 +1,10 @@
+# Automatic HTTPS (Let's Encrypt). Point both DNS names at this host first.
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:8000
+}
+
+{$DASHBOARD_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy frontend:8080
+}
