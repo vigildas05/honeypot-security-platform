@@ -1,6 +1,7 @@
 # Render Blueprint: API (+ embedded worker) on the free web plan.
-# Postgres is NOT created here: use Neon (free, doesn't expire) and paste its
-# *direct* (non-pooler) connection string into DATABASE_URL.
+# Postgres is NOT created here: use Neon (free, doesn't expire). Paste BOTH of
+# its connection strings: pooled into DATABASE_URL (API requests) and direct
+# into DATABASE_URL_UNPOOLED (migrations + worker, which need session state).
 # See docs/DEPLOYMENT.md for the full walkthrough.
 services:
   - type: web
@@ -22,7 +23,9 @@ services:
       - key: TRUST_PROXY
         value: "1"
       - key: DATABASE_URL
-        sync: false                  # Neon direct connection string, ?sslmode=require
+        sync: false                  # Neon POOLED string (-pooler host), ?sslmode=require
+      - key: DATABASE_URL_UNPOOLED
+        sync: false                  # Neon DIRECT string (no -pooler), ?sslmode=require
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: SENSOR_TOKENS

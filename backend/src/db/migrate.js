@@ -1,7 +1,10 @@
 import { env } from "../config/env.js";
 import { createUserIfMissing } from "../services/userService.js";
 import { runMigrations } from "./migrations.js";
-import { pool } from "./pool.js";
+import { closePools, getDirectPool } from "./pool.js";
+
+// Migrations and admin scripts need a direct (non-pooled) connection.
+const pool = getDirectPool();
 
 const WEAK_PASSWORDS = new Set(["admin", "admin123", "password", "changeme", "demo"]);
 
@@ -25,11 +28,11 @@ async function migrate() {
   await seedUser(env.seedAdminUser, env.seedAdminPassword, "admin");
   await seedUser(env.seedDemoUser, env.seedDemoPassword, "demo");
   console.log("Database schema is ready.");
-  await pool.end();
+  await closePools();
 }
 
 migrate().catch(async (error) => {
   console.error(error);
-  await pool.end();
+  await closePools();
   process.exit(1);
 });

@@ -3,3 +3,7 @@ dist/
 .env
 *.log
 .DS_Store
+command.txt
+.env.local
+.env.*.local
+.neon

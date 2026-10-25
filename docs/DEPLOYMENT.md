@@ -4,7 +4,7 @@ Target layout (all on free tiers):
 
 | Component | Where | Notes |
 | --- | --- | --- |
-| Postgres | **Neon** (free) | Doesn't expire like Render's free Postgres. Use the *direct* connection string. |
+| Postgres | **Neon** (free) | Doesn't expire like Render's free Postgres. Pooled URL for the API, direct URL for migrations and the worker. |
 | API + worker | **Render** web service (free), `EMBEDDED_WORKER=true` | Render background workers are paid. The worker runs inside the API process instead. |
 | Dashboard | **Vercel** (free) | Static Vite build. API URL and CSP baked in at build time. |
 | Container images | **GHCR** via GitHub Actions | Published by `release.yml` after CI passes. amd64 + arm64. |
@@ -47,12 +47,21 @@ openssl rand -base64 18   # DASHBOARD_ADMIN_PASSWORD (or pick a long passphrase)
 
 ## 2. Postgres on Neon
 
-1. Create a Neon project in a region close to your Render region (e.g. Frankfurt ↔ `eu-central-1`).
-2. Copy the **direct** connection string, not the one with `-pooler` in the hostname, and make
-   sure it ends with `?sslmode=require`. The worker's job queue (pg-boss) and the correlator use
-   session-level advisory locks, which don't work through a transaction pooler.
-3. You don't need to create tables: the API runs migrations on every start (idempotent and
-   advisory-locked).
+1. Create a Neon project in a region close to your Render region (e.g. Frankfurt ↔ `eu-central-1`),
+   or link an existing one with the Neon CLI: `neon init` then `neon deploy`, which writes both
+   strings to the gitignored `.env.local`.
+2. You need **both** connection strings:
+   - `DATABASE_URL`: the **pooled** one (hostname contains `-pooler`). The API uses it for
+     request traffic.
+   - `DATABASE_URL_UNPOOLED`: the **direct** one (no `-pooler`). Migrations and the worker use
+     it, because pg-boss and the correlator's session advisory locks don't work through
+     PgBouncer's transaction mode.
+
+   If only `DATABASE_URL` is set, everything uses it, which is fine for a plain Postgres.
+   `sslmode=require` is upgraded to `verify-full` in code, so the server certificate is always
+   verified.
+3. You don't need to create tables: migrations run on every start (idempotent and
+   advisory-locked) over the direct URL.
 
 ## 3. API + worker on Render
 
@@ -61,7 +70,8 @@ openssl rand -base64 18   # DASHBOARD_ADMIN_PASSWORD (or pick a long passphrase)
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | the Neon direct connection string |
+   | `DATABASE_URL` | the Neon **pooled** connection string |
+   | `DATABASE_URL_UNPOOLED` | the Neon **direct** connection string |
    | `SENSOR_TOKENS` | `oci-ssh-1:<ssh token>,oci-http-1:<http token>` |
    | `CORS_ORIGINS` | your Vercel URL from step 4, e.g. `https://honeypot-soc.vercel.app` (update it after step 4) |
    | `DASHBOARD_ADMIN_PASSWORD` | 12+ characters. Weak passwords are refused in production. |

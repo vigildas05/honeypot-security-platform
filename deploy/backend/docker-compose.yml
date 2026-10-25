@@ -21,6 +21,8 @@ x-hardening: &hardening
 x-backend-env: &backend-env
   NODE_ENV: production
   DATABASE_URL: ${DATABASE_URL:-postgresql://honeypot:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/honeypot}
+  # Managed Postgres with a pooler (e.g. Neon): direct URL for migrations + worker.
+  DATABASE_URL_UNPOOLED: ${DATABASE_URL_UNPOOLED:-}
   JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
   SENSOR_TOKENS: ${SENSOR_TOKENS:?set SENSOR_TOKENS}
   NEVER_BLOCK_IPS: ${NEVER_BLOCK_IPS:-}

@@ -2,7 +2,10 @@
 // The password is read from the DASHBOARD_SET_PASSWORD env var so it never
 // lands in shell history or process listings.
 import { upsertUser } from "../services/userService.js";
-import { pool } from "./pool.js";
+import { closePools, getDirectPool } from "./pool.js";
+
+// Migrations and admin scripts need a direct (non-pooled) connection.
+const pool = getDirectPool();
 
 const [username, role] = process.argv.slice(2);
 const password = process.env.DASHBOARD_SET_PASSWORD ?? "";
@@ -18,5 +21,5 @@ try {
   await upsertUser(pool, { username, password, role });
   console.log(`User "${username}" saved with role ${role}.`);
 } finally {
-  await pool.end();
+  await closePools();
 }

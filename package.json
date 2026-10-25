@@ -1,0 +1,13 @@
+{
+  "name": "honeypot-security-platform",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend run build && npm --prefix backend run typecheck",
+    "test": "npm --prefix backend test && npm --prefix honeypots test && npm --prefix frontend test",
+    "test:security": "npm --prefix backend run test:security"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.4",
+    "@neon/env": "^1.6.5"
+  }
+}

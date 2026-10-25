@@ -11,7 +11,7 @@ import { llmConfigured, loadAgentConfig } from "./config/agent.js";
 import { loadEnrichmentConfig } from "./config/enrichment.js";
 import { env } from "./config/env.js";
 import { closeIdleIncidents, correlateNewEvents, rescoreIncident } from "./correlation/correlator.js";
-import { pool } from "./db/pool.js";
+import { closePools, getDirectPool, withVerifiedTls } from "./db/pool.js";
 import { createEnrichmentService } from "./enrichment/service.js";
 import { logger as rootLogger } from "./lib/logger.js";
 import { incrementCounters } from "./lib/metrics.js";
@@ -19,6 +19,9 @@ import { expireActions } from "./services/actionService.js";
 import { applyRetention, loadRetentionConfig } from "./services/retention.js";
 
 const log = rootLogger.child({ component: "worker" });
+// The worker holds session-level advisory locks and runs pg-boss, which need a
+// direct (non-pooled) connection; on Neon that is DATABASE_URL_UNPOOLED.
+const pool = getDirectPool();
 const Q_ENRICH = "enrich-ip";
 const Q_ANALYZE = "analyze-incident";
 const Q_EXPIRE = "expire-actions";
@@ -36,7 +39,7 @@ const enrichment = await createEnrichmentService({
   log: (msg) => rootLogger.warn({ component: "enrichment" }, msg)
 });
 
-const boss = new PgBoss({ connectionString: env.databaseUrl, schema: "pgboss", application_name: "honeypot-worker" });
+const boss = new PgBoss({ connectionString: withVerifiedTls(env.databaseUrlDirect), schema: "pgboss", application_name: "honeypot-worker" });
 boss.on("error", (error) => log.error({ err: error }, "pg-boss error"));
 
 /**
@@ -188,7 +191,7 @@ async function shutdown() {
   healthServer?.close();
   await boss.stop({ graceful: true, timeout: 20_000 }).catch(() => {});
   lockClient?.release();
-  await pool.end().catch(() => {});
+  await closePools();
   process.exit(0);
 }
 process.on("SIGTERM", shutdown);

@@ -119,6 +119,15 @@ export function loadConfig(raw) {
     port: int(raw.BACKEND_PORT ?? raw.PORT, 8000),
     databaseUrl:
       raw.DATABASE_URL ?? "postgresql://honeypot:honeypot_password@localhost:5432/honeypot",
+    /**
+     * Direct (non-pooled) connection for migrations and the worker, which need
+     * session state (pg-boss, session advisory locks). On Neon this is
+     * DATABASE_URL_UNPOOLED; elsewhere it falls back to DATABASE_URL.
+     */
+    databaseUrlDirect:
+      raw.DATABASE_URL_UNPOOLED ||
+      raw.DATABASE_URL ||
+      "postgresql://honeypot:honeypot_password@localhost:5432/honeypot",
     corsOrigins: (raw.CORS_ORIGINS ?? "http://localhost:5173")
       .split(",")
       .map((origin) => origin.trim())
