@@ -30,7 +30,7 @@ INGEST_PORT="${INGEST_PORT:-443}"
 ADMIN_SOURCE_CIDRS="${ADMIN_SOURCE_CIDRS:-}"          # e.g. "203.0.113.10/32,198.51.100.0/24"; empty = any
 SENSOR_SUBNET="${SENSOR_SUBNET:-172.30.53.0/24}"      # matches deploy/sensor/docker-compose.yml
 SENSOR_PORTS="${SENSOR_PORTS:-2222,8080}"             # container-side ports after Docker's DNAT
-NTP_SERVERS="${NTP_SERVERS:-169.254.169.254}"         # OCI and GCP serve NTP on the metadata IP
+NTP_SERVERS="${NTP_SERVERS:-169.254.169.254,169.254.169.123}"  # OCI/GCP metadata IP, AWS Time Sync
 ALLOW_HOST_METADATA="${ALLOW_HOST_METADATA:-true}"    # cloud agents on the HOST need it; containers never get it
 TAILSCALE="${TAILSCALE:-false}"
 ROLLBACK_SECONDS=120

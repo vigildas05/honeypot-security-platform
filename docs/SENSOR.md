@@ -85,6 +85,18 @@ The broader deployment guide (backend, database, dashboard) comes in Phase 9:
    sudo systemctl enable --now honeypot-firewall.service honeypot-firewall-refresh.timer
    ```
 
+### AWS instead of Oracle
+
+AWS India accepts debit cards (Visa, Mastercard, RuPay) and UPI, and the AWS Free plan's
+credits cover a small sensor VM. Same files, different console:
+
+- EC2 → Launch instance: Ubuntu 24.04 LTS, `t3.micro` (or `t4g.small` for arm64), region
+  `ap-south-1` (Mumbai); key pair = your `.pub`; **Advanced details → User data** = your cloud-init.
+- **Security group** inbound rules (instead of an OCI security list): TCP 22, 80 and your admin
+  port from `0.0.0.0/0`.
+- The firewall already allows Amazon Time Sync (`169.254.169.123`) and reads the VPC DNS
+  resolver from the system. Public IPv4 addresses are billed hourly on AWS, against your credits.
+
 ### Tailscale instead of a public admin port
 
 Install Tailscale, set `TAILSCALE=true` in `firewall.conf`, set `ListenAddress` in the sshd

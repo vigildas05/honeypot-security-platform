@@ -7,3 +7,4 @@ command.txt
 .env.local
 .env.*.local
 .neon
+*.local.yaml
