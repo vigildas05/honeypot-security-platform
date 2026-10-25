@@ -42,7 +42,7 @@ runcmd:
   # 1. Move real sshd off :22 BEFORE the fake SSH sensor binds it.
   #    (Ubuntu 22.10+ uses socket activation; disable it so Port applies.)
   - systemctl disable --now ssh.socket || true
-  - sshd -t && systemctl enable --now ssh && systemctl restart ssh
+  - install -d -m 0755 /run/sshd && sshd -t && systemctl enable --now ssh && systemctl restart ssh
   # 2. Code + marker. /etc/honeypot-sensor marks this host as a sensor; the
   #    blocklist enforcer refuses to run on any host that has it.
   - install -d -m 0700 /etc/honeypot-sensor
@@ -53,4 +53,4 @@ runcmd:
   - systemctl daemon-reload && systemctl restart docker
   # 3. Pull images now, while egress is open. Containers start once .env exists.
   - cd /opt/honeypot/deploy/sensor && docker compose pull --ignore-buildable || true
-  - echo "Sensor bootstrapped. Next: edit /etc/honeypot-sensor/firewall.conf, copy .env, see docs/SENSOR.md" > /etc/motd
+  - 'echo "Sensor bootstrapped. Next: edit /etc/honeypot-sensor/firewall.conf, copy .env, see docs/SENSOR.md" > /etc/motd'
