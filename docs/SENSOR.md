@@ -131,7 +131,19 @@ ssh -p 22 root@SENSOR_IP             # the fake shell; try "whoami" then check t
 curl http://SENSOR_IP/.env            # should appear as an incident within a minute
 ```
 
-`TODO: fill after deployment`: record the nmap result and the first-incident screenshot here.
+**Result, 2026-10-25 (AWS `ap-southeast-2`, Ubuntu 24.04, t3.micro):**
+
+| Check | Result |
+| --- | --- |
+| Container hardening | both `user=65532:65532 ro=true caps=[ALL]`, `no-new-privileges:true` |
+| Sensor env | only `SENSOR_INGEST_TOKEN` (plus `SSH_HOST_KEY_PATH` on ssh) |
+| Sensor network → ingest `/health` | `200` (first try timed out on Render's cold start) |
+| Sensor network → example.com / metadata, host → example.com | blocked |
+| Full TCP scan, ports 1–65535 | open: 22, 80, 49222 only |
+| Fake shell (`root:root`) | `whoami` → `root` (exec and interactive), events accepted |
+| `GET /.env` | decoy `200`, event accepted |
+
+`TODO`: add the first-incident dashboard screenshot here.
 
 ## Rebuild and update cadence
 
