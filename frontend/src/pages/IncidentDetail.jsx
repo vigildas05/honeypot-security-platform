@@ -9,6 +9,7 @@ const FALLBACK_TEXT = {
   llm_not_configured: "No LLM is configured; this is the deterministic rule-based report.",
   budget_exhausted: "The daily LLM budget was used up; this is the rule-based report.",
   validation_failed: "The LLM's output failed validation twice and was discarded; this is the rule-based report.",
+  llm_error: "The LLM request failed (connection, model or provider error); this is the rule-based report.",
   canary_leak: "The LLM output leaked the prompt canary (likely prompt injection) and was discarded; this is the rule-based report."
 };
 

@@ -89,7 +89,11 @@ export async function runAgent({ incident, events, llm, budget, policy, canaryFa
         lastError = "the request failed; reply with the JSON object only";
       }
     }
-    if (!llmReport && !fallbackReason) fallbackReason = "validation_failed";
+    // Every attempt failed at the request level (HTTP error, timeout, unknown
+    // model): the model never answered, so nothing failed validation.
+    if (!llmReport && !fallbackReason) {
+      fallbackReason = calls.length > 0 && calls.every((c) => c.outcome === "error") ? "llm_error" : "validation_failed";
+    }
   }
 
   const incidentIps = [incident.src_ip];

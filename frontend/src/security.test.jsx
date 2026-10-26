@@ -113,6 +113,21 @@ describe("IncidentDetail with hostile data", () => {
     expect(screen.getByText(/Prompt-injection attempt detected/)).toBeTruthy();
   });
 
+  it("explains an LLM request failure as an error, not a validation failure", async () => {
+    const original = incident.reports;
+    incident.reports = [{
+      id: 2, ai_generated: false, model: null, validation_status: "fallback", fallback_reason: "llm_error", created_at: "2026-10-01T10:06:00Z",
+      report: { summary: "rule summary", attacker_profile: "rule profile", severity: "high", techniques: [] }
+    }];
+    try {
+      await renderDetail("admin");
+      expect(screen.getByText(/The LLM request failed/)).toBeTruthy();
+      expect(screen.queryByText(/failed validation/)).toBeNull();
+    } finally {
+      incident.reports = original;
+    }
+  });
+
   it("shows approval controls to admins only", async () => {
     await renderDetail("demo");
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();

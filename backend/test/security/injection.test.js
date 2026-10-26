@@ -199,10 +199,18 @@ describe("invalid output is rejected: one retry, then rule-only fallback", () =>
     expect(result.source).toBe("llm");
   });
 
-  it("falls back when the LLM errors", async () => {
-    const result = await run(mockLlm([new Error("ECONNRESET")]));
+  it("falls back with llm_error (not validation_failed) when every request errors", async () => {
+    const result = await run(mockLlm([new Error("LLM HTTP 404: The model `x` does not exist")]));
     expect(result.source).toBe("rules");
+    expect(result.fallbackReason).toBe("llm_error");
     expect(result.calls.map((c) => c.outcome)).toEqual(["error", "error"]);
+    expect(result.calls[0].detail).toContain("HTTP 404");
+  });
+
+  it("reports validation_failed when the model answered at least once with invalid output", async () => {
+    const result = await run(mockLlm(["not json", new Error("ECONNRESET")]));
+    expect(result.fallbackReason).toBe("validation_failed");
+    expect(result.calls.map((c) => c.outcome)).toEqual(["invalid", "error"]);
   });
 
   it("does not call the LLM when the daily budget is exhausted", async () => {
