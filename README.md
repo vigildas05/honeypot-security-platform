@@ -8,7 +8,9 @@ firewall blocklist.
 Attacker-controlled data flows into an LLM here, so the system's own security (prompt
 injection, response safety, sensor isolation) is treated as a core feature, not an add-on.
 
-> Live demo: `TODO: fill after deployment` · Read-only demo account: `TODO: fill after deployment`
+> **Live demo:** <https://honeypot-security-platform.vercel.app> · Read-only demo account
+> (IPs masked, no approvals) available on request. The sensor is live on AWS (`ap-southeast-2`)
+> and collecting real internet traffic. See [Screenshots](#screenshots).
 
 ## Architecture
 
@@ -196,11 +198,59 @@ The sensor is assumed to be compromisable. Details: [docs/SENSOR.md](docs/SENSOR
 
 ## Screenshots
 
-`TODO: fill after deployment`: replace these with real captures.
+Captured from the [live dashboard](https://honeypot-security-platform.vercel.app) on 2026-10-26,
+signed in as the read-only demo user (source IPs are partially masked). All traffic is real:
+internet scanners and bots hitting the AWS sensor, not simulated data.
 
-| Incidents | Incident detail | Approval queue | Metrics |
-| --- | --- | --- | --- |
-| *(screenshot)* | *(screenshot)* | *(screenshot)* | *(screenshot)* |
+### Overview
+
+Event counters, service split and top passwords, refreshed every 5 seconds, plus a live feed
+of the latest events.
+
+| Overview | Live feed |
+| --- | --- |
+| ![Overview](docs/screenshots/overview.png) | ![Live feed](docs/screenshots/live-feed.png) |
+
+### Incidents
+
+Events from the same source are correlated into incidents, scored, and mapped to MITRE ATT&CK.
+They can be filtered by severity, technique, tag, status and time window.
+
+![Incidents](docs/screenshots/incidents.png)
+
+### Incident detail
+
+Each incident shows its ATT&CK techniques with the rule evidence, threat intel, the analyst
+report (rule-based here, AI-generated when an LLM is configured), the proposed response and
+the raw event timeline.
+
+| Techniques and scoring | Analyst report | Proposed actions and timeline |
+| --- | --- | --- |
+| ![Incident detail](docs/screenshots/incident-detail.png) | ![Analyst report](docs/screenshots/incident-report.png) | ![Proposed actions](docs/screenshots/incident-actions.png) |
+
+### Approvals and blocklist
+
+The agent and rule engine only **propose** actions. Every proposal waits in the approval queue
+for a human, and only approved, active blocks reach the firewall blocklist (`/edl/blocklist.txt`).
+
+| Approval queue | Active blocklist |
+| --- | --- |
+| ![Approval queue](docs/screenshots/approvals.png) | ![Blocklist](docs/screenshots/blocklist.png) |
+
+### Metrics
+
+Events per hour, top source IPs, countries, usernames, passwords and ATT&CK techniques,
+incidents by severity, prompt-injection attempts, and the AI agent's health and budgets.
+
+| Events and totals | Sources and severity |
+| --- | --- |
+| ![Metrics](docs/screenshots/metrics.png) | ![Metrics breakdown](docs/screenshots/metrics-breakdown.png) |
+| **Credentials and techniques** | **AI agent** |
+| ![Top techniques](docs/screenshots/metrics-techniques.png) | ![AI agent](docs/screenshots/metrics-ai-agent.png) |
+
+### Login
+
+<img src="docs/screenshots/login.png" alt="Login" width="400">
 
 ## Run locally
 
